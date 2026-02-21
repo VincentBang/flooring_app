@@ -78,118 +78,240 @@ def money(x: float) -> str:
 # PDF GENERATION
 # =========================
 def build_quote_pdf(payload: dict) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.utils import ImageReader
+
+    def _rgb(t):
+        return colors.Color(t[0], t[1], t[2])
+
+    def _draw_kv(c, x_label, x_value, y, k, v):
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x_label, y, f"{k}:")
+        c.setFont("Helvetica", 10)
+        c.drawString(x_value, y, v if v else "")
+        return y - 14
+
+    def _hr(c, x1, x2, y, rgb):
+        c.setStrokeColor(_rgb(rgb))
+        c.setLineWidth(1)
+        c.line(x1, y, x2, y)
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
     left = 42
     right = width - 42
-    y = height - 48
+    content_top = height - 42
+    y = content_top
 
-    # Header
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(left, y, "QUOTATION")
-    y -= 22
+    # ===== Header Bar =====
+    header_h = 82
+    c.setFillColor(_rgb(BRAND["header_rgb"]))
+    c.rect(0, height - header_h, width, header_h, stroke=0, fill=1)
 
-    # Client block (blank is OK; we do NOT force)
-    c.setFont("Helvetica", 10)
-    c.drawString(left, y, f"Client: {payload['client_name']}")
-    y -= 14
-    c.drawString(left, y, f"Phone: {payload['client_phone']}    Email: {payload['client_email']}")
-    y -= 14
-    c.drawString(left, y, f"Site: {payload['site_address']}")
-    y -= 14
-    c.drawString(left, y, f"Mode: {payload['job_mode']}")
+    # Logo (optional)
+    logo_w, logo_h = 120, 42
+    logo_x = left
+    logo_y = height - header_h + (header_h - logo_h) / 2
+
+    try:
+        logo = ImageReader(LOGO_PATH)
+        c.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, mask="auto", preserveAspectRatio=True)
+    except Exception:
+        pass
+
+    # Company details (right side, white)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(right, height - 22, COMPANY["name"])
+    c.setFont("Helvetica", 9)
+    c.drawRightString(right, height - 38, COMPANY["abn"])
+    c.drawRightString(right, height - 52, f"{COMPANY['phone']}  |  {COMPANY['email']}")
+    c.drawRightString(right, height - 66, COMPANY.get("website", ""))
+
+    # ===== Title =====
+    y = height - header_h - 26
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(left, y, "Quotation")
+    y -= 8
+    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
     y -= 18
 
-    # Measurements
+    # ===== Client Block =====
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(left, y, "Measurements")
+    c.drawString(left, y, "Client Details")
     y -= 14
 
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(left, y, "Room")
-    c.drawString(left + 210, y, "L (m)")
-    c.drawString(left + 260, y, "W (m)")
-    c.drawString(left + 310, y, "Area (m²)")
-    y -= 10
-    c.setFont("Helvetica", 9)
+    x_label = left
+    x_value = left + 78
 
-    for r in payload["rooms"]:
-        c.drawString(left, y, r["name"])
-        c.drawRightString(left + 245, y, f"{r['length']:.2f}")
-        c.drawRightString(left + 295, y, f"{r['width']:.2f}")
-        c.drawRightString(left + 370, y, f"{r['area']:.2f}")
-        y -= 12
-        if y < 160:
+    y = _draw_kv(c, x_label, x_value, y, "Client", payload.get("client_name", ""))
+    y = _draw_kv(c, x_label, x_value, y, "Phone", payload.get("client_phone", ""))
+    y = _draw_kv(c, x_label, x_value, y, "Email", payload.get("client_email", ""))
+    y = _draw_kv(c, x_label, x_value, y, "Site", payload.get("site_address", ""))
+    y = _draw_kv(c, x_label, x_value, y, "Mode", payload.get("job_mode", ""))
+
+    y -= 6
+    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    y -= 18
+
+    # ===== Measurements Table =====
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(left, y, "Measurements")
+    y -= 12
+
+    # Table header background
+    table_w = right - left
+    header_row_h = 18
+    row_h = 16
+
+    c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
+    c.rect(left, y - header_row_h + 4, table_w, header_row_h, stroke=0, fill=1)
+
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 9)
+
+    col_room = left + 6
+    col_l = left + 250
+    col_w = left + 315
+    col_a = left + 390
+
+    c.drawString(col_room, y, "Room")
+    c.drawRightString(col_l, y, "L (m)")
+    c.drawRightString(col_w, y, "W (m)")
+    c.drawRightString(col_a, y, "Area (m²)")
+    y -= row_h
+
+    c.setFont("Helvetica", 9)
+    rooms = payload.get("rooms", [])
+    for idx, r in enumerate(rooms):
+        # alternate row shading
+        if idx % 2 == 0:
+            c.setFillColor(colors.white)
+        else:
+            c.setFillColor(_rgb((0.98, 0.98, 0.98)))
+        c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
+
+        c.setFillColor(colors.black)
+        c.drawString(col_room, y, str(r.get("name", "")))
+        c.drawRightString(col_l, y, f"{float(r.get('length', 0.0)):.2f}")
+        c.drawRightString(col_w, y, f"{float(r.get('width', 0.0)):.2f}")
+        c.drawRightString(col_a, y, f"{float(r.get('area', 0.0)):.2f}")
+        y -= row_h
+
+        if y < 210:
             c.showPage()
-            y = height - 48
-            c.setFont("Helvetica", 9)
+            y = height - 60
 
     y -= 6
     c.setFont("Helvetica", 10)
-    c.drawString(left, y, f"Total area: {payload['total_area']:.2f} m²")
+    c.drawString(left, y, f"Total area: {payload.get('total_area', 0.0):.2f} m²")
     y -= 14
-    c.drawString(left, y, f"Wastage: {payload['wastage_pct']:.1f}%")
+    c.drawString(left, y, f"Wastage: {payload.get('wastage_pct', 0.0):.1f}%")
     y -= 14
-    c.drawString(left, y, f"Chargeable area: {payload['chargeable_area']:.2f} m²")
+    c.drawString(left, y, f"Chargeable area: {payload.get('chargeable_area', 0.0):.2f} m²")
+    y -= 16
+
+    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
     y -= 18
 
-    # Scope / pricing
+    # ===== Pricing Table =====
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
-    y -= 14
+    y -= 12
 
+    c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
+    c.rect(left, y - header_row_h + 4, table_w, header_row_h, stroke=0, fill=1)
+
+    c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(left, y, "Item")
-    c.drawRightString(right - 120, y, "Qty")
-    c.drawRightString(right - 55, y, "Total")
-    y -= 10
+
+    col_item = left + 6
+    col_qty = right - 150
+    col_total = right - 6
+
+    c.drawString(col_item, y, "Item")
+    c.drawRightString(col_qty, y, "Qty")
+    c.drawRightString(col_total, y, "Total")
+    y -= row_h
+
     c.setFont("Helvetica", 9)
+    items = payload.get("line_items", [])
+    for idx, li in enumerate(items):
+        if idx % 2 == 0:
+            c.setFillColor(colors.white)
+        else:
+            c.setFillColor(_rgb((0.98, 0.98, 0.98)))
+        c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
 
-    for li in payload["line_items"]:
-        c.drawString(left, y, li["label"])
-        c.drawRightString(right - 120, y, li["qty_str"])
-        c.drawRightString(right - 55, y, money(li["total"]))
-        y -= 12
-        if y < 120:
+        c.setFillColor(colors.black)
+        label = str(li.get("label", ""))
+        qty_str = str(li.get("qty_str", ""))
+        total_val = float(li.get("total", 0.0))
+
+        # simple wrap for long item names (single wrap line)
+        if len(label) > 60:
+            label = label[:57] + "..."
+
+        c.drawString(col_item, y, label)
+        c.drawRightString(col_qty, y, qty_str)
+        c.drawRightString(col_total, y, money(total_val))
+        y -= row_h
+
+        if y < 180:
             c.showPage()
-            y = height - 48
-            c.setFont("Helvetica", 9)
+            y = height - 60
 
     y -= 10
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(left, y, "Subtotal (ex GST)")
-    c.drawRightString(right - 55, y, money(payload["subtotal_ex_gst"]))
-    y -= 14
 
+    # ===== Totals box (right aligned) =====
+    box_w = 220
+    box_h = 70
+    box_x = right - box_w
+    box_y = y - box_h + 10
+
+    c.setFillColor(_rgb((0.97, 0.97, 0.97)))
+    c.rect(box_x, box_y, box_w, box_h, stroke=1, fill=1)
+
+    subtotal = float(payload.get("subtotal_ex_gst", 0.0))
+    gst = float(payload.get("gst", 0.0))
+    total_inc = float(payload.get("total_inc_gst", 0.0))
+
+    c.setFillColor(colors.black)
     c.setFont("Helvetica", 10)
-    c.drawString(left, y, "GST")
-    c.drawRightString(right - 55, y, money(payload["gst"]))
-    y -= 14
+    c.drawString(box_x + 10, box_y + 48, "Subtotal (ex GST)")
+    c.drawRightString(box_x + box_w - 10, box_y + 48, money(subtotal))
+
+    c.drawString(box_x + 10, box_y + 30, "GST")
+    c.drawRightString(box_x + box_w - 10, box_y + 30, money(gst))
 
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(left, y, "Total (inc GST)")
-    c.drawRightString(right - 55, y, money(payload["total_inc_gst"]))
-    y -= 18
+    c.drawString(box_x + 10, box_y + 12, "Total (inc GST)")
+    c.drawRightString(box_x + box_w - 10, box_y + 12, money(total_inc))
 
-    c.setFont("Helvetica-Bold", 10)
+    y = box_y - 18
+    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    y -= 16
+
+    # ===== Terms =====
+    c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Terms")
     y -= 14
+
     c.setFont("Helvetica", 9)
-    for t in payload["terms"]:
+    for t in payload.get("terms", []):
         c.drawString(left, y, f"• {t}")
         y -= 12
         if y < 60:
             c.showPage()
-            y = height - 48
-            c.setFont("Helvetica", 9)
+            y = height - 60
 
     c.showPage()
     c.save()
     buf.seek(0)
     return buf.read()
-
 
 # =========================
 # UI
