@@ -257,6 +257,33 @@ def build_quote_pdf(payload: dict) -> bytes:
 st.set_page_config(page_title="Flooring Quote Prototype", layout="centered")
 st.title("📱 Flooring Quote Prototype (V1)")
 
+# -------------------------
+# Session defaults (critical)
+# -------------------------
+DEFAULTS = {
+    "step": 1,
+    "client_name": "",
+    "client_phone": "",
+    "client_email": "",
+    "site_address": "",
+    "job_mode": "Supply & Install",   # ensures Mode is never missing
+    "quote_type": "Retail",
+    "wastage_pct": DEFAULT_WASTAGE_PCT,
+    "product_id": PRODUCTS[0]["id"],
+    "install_id": INSTALL_ONLY[0]["id"],
+    "removal_selected": [],
+    "furniture_rate": DEFAULT_FURNITURE_PER_ROOM,
+    "skirting_id": SKIRTING[0]["id"],
+}
+
+for k, v in DEFAULTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# Rooms list default
+if "rooms" not in st.session_state or not st.session_state.rooms:
+    st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
+
 # Session init
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -595,11 +622,11 @@ if st.session_state.step == 2:
         )
 
     payload = {
-        "client_name": st.session_state.get("client_name", "—") or "—",
-        "client_phone": st.session_state.get("client_phone", "—") or "—",
-        "client_email": st.session_state.get("client_email", "—") or "—",
-        "site_address": st.session_state.get("site_address", "—") or "—",
-        "job_mode": st.session_state.get("job_mode", "—"),
+        "client_name": (st.session_state.get("client_name") or "").strip(),
+        "client_phone": (st.session_state.get("client_phone") or "").strip(),
+        "client_email": (st.session_state.get("client_email") or "").strip(),
+        "site_address": (st.session_state.get("site_address") or "").strip(),
+        "job_mode": st.session_state.get("job_mode", "Supply & Install"),
         "rooms": rooms_out,
         "total_area": total_area,
         "wastage_pct": wastage_pct,
