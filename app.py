@@ -206,7 +206,8 @@ if st.session_state.step == 1:
         st.text_input("Client email", key="client_email")
         st.text_input("Site address", key="site_address")
 
-    st.session_state.job_mode = st.radio(
+
+    st.radio(
         "Work type",
         ["Supply & Install", "Installation Only"],
         horizontal=True,
