@@ -1,8 +1,6 @@
 import io
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import List
 
-import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -47,12 +45,26 @@ GST_RATE = 0.10
 
 
 # =========================
-# PDF GENERATION (simple & professional enough for prototype)
+# HELPERS
 # =========================
-def _money(x: float) -> str:
+def find_by_id(items: List[dict], item_id: str) -> dict:
+    for it in items:
+        if it["id"] == item_id:
+            return it
+    raise KeyError(item_id)
+
+
+def line_item(label: str, qty_str: str, total: float) -> dict:
+    return {"label": label, "qty_str": qty_str, "total": float(total)}
+
+
+def money(x: float) -> str:
     return f"${x:,.2f}"
 
 
+# =========================
+# PDF GENERATION
+# =========================
 def build_quote_pdf(payload: dict) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -77,7 +89,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.drawString(left, y, f"Mode: {payload['job_mode']}")
     y -= 18
 
-    # Rooms table
+    # Measurements
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Measurements")
     y -= 14
@@ -110,7 +122,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.drawString(left, y, f"Chargeable area: {payload['chargeable_area']:.2f} m²")
     y -= 18
 
-    # Scope / line items
+    # Line items
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
     y -= 14
@@ -125,7 +137,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     for li in payload["line_items"]:
         c.drawString(left, y, li["label"])
         c.drawRightString(right - 120, y, li["qty_str"])
-        c.drawRightString(right - 55, y, _money(li["total"]))
+        c.drawRightString(right - 55, y, money(li["total"]))
         y -= 12
         if y < 120:
             c.showPage()
@@ -135,19 +147,20 @@ def build_quote_pdf(payload: dict) -> bytes:
     y -= 10
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left, y, "Subtotal (ex GST)")
-    c.drawRightString(right - 55, y, _money(payload["subtotal_ex_gst"]))
+    c.drawRightString(right - 55, y, money(payload["subtotal_ex_gst"]))
     y -= 14
 
     c.setFont("Helvetica", 10)
     c.drawString(left, y, "GST")
-    c.drawRightString(right - 55, y, _money(payload["gst"]))
+    c.drawRightString(right - 55, y, money(payload["gst"]))
     y -= 14
 
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Total (inc GST)")
-    c.drawRightString(right - 55, y, _money(payload["total_inc_gst"]))
+    c.drawRightString(right - 55, y, money(payload["total_inc_gst"]))
     y -= 18
 
+    # Terms
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left, y, "Terms")
     y -= 14
@@ -167,24 +180,6 @@ def build_quote_pdf(payload: dict) -> bytes:
 
 
 # =========================
-# HELPERS
-# =========================
-def find_by_id(items: List[dict], item_id: str) -> dict:
-    for it in items:
-        if it["id"] == item_id:
-            return it
-    raise KeyError(item_id)
-
-
-def line_item(label: str, qty_str: str, total: float) -> dict:
-    return {"label": label, "qty_str": qty_str, "total": float(total)}
-
-
-def init_rooms_df():
-    return pd.DataFrame([{"Room": "Living", "Length_m": 3.0, "Width_m": 4.0}])
-
-
-# =========================
 # UI
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="centered")
@@ -193,8 +188,11 @@ st.title("📱 Flooring Quote Prototype (V1)")
 # Session init
 if "step" not in st.session_state:
     st.session_state.step = 1
-if "rooms_df" not in st.session_state:
-    st.session_state.rooms_df = init_rooms_df()
+
+# IMPORTANT: keep rooms in session state (mobile-friendly)
+if "rooms" not in st.session_state:
+    st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
+
 
 # ---------- STEP 1: JOB SETUP ----------
 if st.session_state.step == 1:
@@ -202,32 +200,31 @@ if st.session_state.step == 1:
 
     col1, col2 = st.columns(2)
     with col1:
-        client_name = st.text_input("Client name", key="client_name")
-        client_phone = st.text_input("Client phone", key="client_phone")
+        st.text_input("Client name", key="client_name")
+        st.text_input("Client phone", key="client_phone")
     with col2:
-        client_email = st.text_input("Client email", key="client_email")
-        site_address = st.text_input("Site address", key="site_address")
+        st.text_input("Client email", key="client_email")
+        st.text_input("Site address", key="site_address")
 
-    job_mode = st.radio(
+    st.session_state.job_mode = st.radio(
         "Work type",
         ["Supply & Install", "Installation Only"],
         horizontal=True,
         key="job_mode",
     )
 
-    quote_type = st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
+    st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
 
     st.divider()
     st.subheader("Step 2 — Select Scope")
-    c_removal = st.checkbox("Include floor removal & disposal", key="scope_removal")
-    c_furniture = st.checkbox("Include furniture handling", key="scope_furniture")
-    c_skirting = st.checkbox("Include skirting", key="scope_skirting")
+    st.checkbox("Include floor removal & disposal", key="scope_removal")
+    st.checkbox("Include furniture handling", key="scope_furniture")
+    st.checkbox("Include skirting", key="scope_skirting")
 
     st.divider()
 
-    # Validation for next step
-    ok = True
-    if job_mode == "Supply & Install":
+    # Core selection
+    if st.session_state.job_mode == "Supply & Install":
         st.session_state.product_id = st.selectbox(
             "Select timber product (Supply & Install)",
             options=[p["id"] for p in PRODUCTS],
@@ -251,8 +248,8 @@ if st.session_state.step == 1:
         key="wastage_pct_ui",
     )
 
-    # Scope sub-options captured now (so quote page only shows selected)
-    if c_removal:
+    # Scope sub-options
+    if st.session_state.get("scope_removal", False):
         st.session_state.removal_selected = st.multiselect(
             "Existing floor type(s) to remove",
             options=[r["id"] for r in REMOVAL_TYPES],
@@ -263,7 +260,7 @@ if st.session_state.step == 1:
     else:
         st.session_state.removal_selected = []
 
-    if c_furniture:
+    if st.session_state.get("scope_furniture", False):
         st.session_state.furniture_rate = st.number_input(
             "Furniture handling rate ($ per room)",
             min_value=0.0,
@@ -274,7 +271,7 @@ if st.session_state.step == 1:
     else:
         st.session_state.furniture_rate = float(DEFAULT_FURNITURE_PER_ROOM)
 
-    if c_skirting:
+    if st.session_state.get("scope_skirting", False):
         st.session_state.skirting_id = st.selectbox(
             "Skirting height",
             options=[s["id"] for s in SKIRTING],
@@ -284,7 +281,6 @@ if st.session_state.step == 1:
     else:
         st.session_state.skirting_id = None
 
-    # Next
     if st.button("Next → Measurements & Quote"):
         st.session_state.step = 2
         st.rerun()
@@ -292,47 +288,31 @@ if st.session_state.step == 1:
 
 # ---------- STEP 2: QUOTE BUILDER ----------
 if st.session_state.step == 2:
-    st.subheader("Step 3 — Measurements")
-    # Store rooms in session state as list of dicts: {"length": float, "width": float}
-    if "rooms" not in st.session_state:
-        st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
-
+    st.subheader("Step 3 — Measurements (mobile friendly)")
 
     def add_room():
         st.session_state.rooms.append({"length": 0.0, "width": 0.0})
-
 
     def remove_room(idx: int):
         if len(st.session_state.rooms) > 1:
             st.session_state.rooms.pop(idx)
 
-
-    # Render each room as a simple card
     for i, room in enumerate(st.session_state.rooms):
-        st.markdown(f"### Room {i + 1}")
+        st.markdown(f"### Room {i+1}")
         col1, col2, col3 = st.columns([1, 1, 1])
 
         with col1:
             room["length"] = st.number_input(
-                "Length (m)",
-                min_value=0.0,
-                value=float(room.get("length", 0.0)),
-                step=0.1,
-                key=f"len_{i}",
+                "Length (m)", min_value=0.0, value=float(room.get("length", 0.0)), step=0.1, key=f"len_{i}"
             )
         with col2:
             room["width"] = st.number_input(
-                "Width (m)",
-                min_value=0.0,
-                value=float(room.get("width", 0.0)),
-                step=0.1,
-                key=f"wid_{i}",
+                "Width (m)", min_value=0.0, value=float(room.get("width", 0.0)), step=0.1, key=f"wid_{i}"
             )
         with col3:
             area = float(room["length"]) * float(room["width"])
             st.metric("Area (m²)", f"{area:.2f}")
 
-        # Only show remove button if more than 1 room
         if len(st.session_state.rooms) > 1:
             if st.button("Remove", key=f"remove_room_{i}"):
                 remove_room(i)
@@ -340,18 +320,15 @@ if st.session_state.step == 2:
 
     st.button("➕ Add Room", on_click=add_room)
 
-    # Totals
     total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state.rooms)
-
-    wastage_pct = float(st.session_state.get("wastage_pct", 10.0))
+    wastage_pct = float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT))
     chargeable_area = total_area * (1.0 + wastage_pct / 100.0)
 
     st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total area (m²)", f"{total_area:.2f}")
-    c2.metric("Wastage (%)", f"{wastage_pct:.1f}")
-    c3.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
-
+    a, b, c = st.columns(3)
+    a.metric("Total area (m²)", f"{total_area:.2f}")
+    b.metric("Wastage (%)", f"{wastage_pct:.1f}")
+    c.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
     st.divider()
     st.subheader("Step 4 — Quote Items (selected scope only)")
@@ -359,12 +336,13 @@ if st.session_state.step == 2:
     line_items: List[dict] = []
     subtotal = 0.0
 
-    # 1) Core job mode item(s)
+    # 1) Core job mode
     job_mode = st.session_state.get("job_mode", "Supply & Install")
 
     if job_mode == "Supply & Install":
         p = find_by_id(PRODUCTS, st.session_state.get("product_id"))
         st.markdown("#### Supply & Install")
+
         col1, col2 = st.columns(2)
         with col1:
             st.write(f"Product: {p['brand']} — {p['name']}")
@@ -386,6 +364,7 @@ if st.session_state.step == 2:
     else:
         ins = find_by_id(INSTALL_ONLY, st.session_state.get("install_id"))
         st.markdown("#### Installation Only")
+
         col1, col2 = st.columns(2)
         with col1:
             st.write(f"Type: {ins['name']}")
@@ -431,13 +410,12 @@ if st.session_state.step == 2:
                 line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", total))
                 subtotal += total
 
-    # 3) Furniture handling
+    # 3) Furniture handling (NO rooms_df anywhere)
     if st.session_state.get("scope_furniture", False):
         st.markdown("#### Furniture Handling")
-        rate = float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM))
+        base_rate = float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM))
 
-        # Choose rooms by checkbox (mobile-friendly enough for V1)
-        room_names = [str(x) for x in rooms_df["Room"].tolist()]
+        room_names = [f"Room {i+1}" for i in range(len(st.session_state.rooms))]
         selected_rooms = st.multiselect(
             "Select rooms requiring furniture handling",
             options=room_names,
@@ -445,12 +423,13 @@ if st.session_state.step == 2:
             key="furniture_rooms_selected",
         )
         rooms_count = len(selected_rooms)
+
         col1, col2 = st.columns(2)
         with col1:
             rate_override = st.number_input(
                 "Furniture handling rate ($ per room)",
                 min_value=0.0,
-                value=float(rate),
+                value=float(base_rate),
                 step=5.0,
                 key="furniture_rate_override",
             )
@@ -499,10 +478,10 @@ if st.session_state.step == 2:
     gst = subtotal * GST_RATE
     total_inc = subtotal + gst
 
-    colT1, colT2, colT3 = st.columns(3)
-    colT1.metric("Subtotal (ex GST)", f"${subtotal:,.0f}")
-    colT2.metric("GST", f"${gst:,.0f}")
-    colT3.metric("Total (inc GST)", f"${total_inc:,.0f}")
+    t1, t2, t3 = st.columns(3)
+    t1.metric("Subtotal (ex GST)", f"${subtotal:,.0f}")
+    t2.metric("GST", f"${gst:,.0f}")
+    t3.metric("Total (inc GST)", f"${total_inc:,.0f}")
 
     st.divider()
     st.subheader("Step 5 — Generate Quote PDF")
@@ -515,15 +494,17 @@ if st.session_state.step == 2:
     terms_text = st.text_area("Terms (one per line)", "\n".join(terms_default), height=120)
     terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
 
-    # Build payload
+    # Build payload rooms
     rooms_out = []
     for i, r in enumerate(st.session_state.rooms):
-        rooms_out.append({
-            "name": f"Room {i + 1}",
-            "length": float(r["length"]),
-            "width": float(r["width"]),
-            "area": float(r["length"]) * float(r["width"]),
-        })
+        rooms_out.append(
+            {
+                "name": f"Room {i+1}",
+                "length": float(r["length"]),
+                "width": float(r["width"]),
+                "area": float(r["length"]) * float(r["width"]),
+            }
+        )
 
     payload = {
         "client_name": st.session_state.get("client_name", "—") or "—",
