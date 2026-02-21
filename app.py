@@ -114,9 +114,28 @@ def build_quote_pdf(payload: dict) -> bytes:
     y = content_top
 
     # ===== Header Bar =====
-    header_h = 82
-    c.setFillColor(_rgb(BRAND["header_rgb"]))
-    c.rect(0, height - header_h, width, header_h, stroke=0, fill=1)
+    y = height - 48
+    
+    # Company Name
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColor(colors.black)
+    c.drawString(left, y, COMPANY["name"])
+    y -= 16
+    
+    # Company Details (black text)
+    c.setFont("Helvetica", 9)
+    c.drawString(left, y, COMPANY["abn"])
+    y -= 12
+    c.drawString(left, y, f"{COMPANY['phone']}  |  {COMPANY['email']}")
+    y -= 12
+    c.drawString(left, y, COMPANY.get("website", ""))
+    y -= 18
+    
+    # Thin separator line
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.8)
+    c.line(left, y, right, y)
+    y -= 22
 
     # Logo (optional)
     logo_w, logo_h = 120, 42
