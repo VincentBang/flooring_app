@@ -118,7 +118,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     
     # Company Name
     c.setFont("Helvetica-Bold", 16)
-    c.setFillColor(colors.black)
+    c.setFillColor(colors.white)
     c.drawString(left, y, COMPANY["name"])
     y -= 16
     
