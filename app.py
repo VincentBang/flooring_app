@@ -5,6 +5,21 @@ import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+# =========================
+# COMPANY DETAILS (edit these)
+# =========================
+COMPANY = {
+    "name": "YOUR COMPANY NAME PTY LTD",
+    "abn": "ABN: 12 345 678 901",
+    "phone": "Phone: 04xx xxx xxx",
+    "email": "Email: info@yourcompany.com",
+    "website": "Website: yourcompany.com",
+    "address": "Address line (optional)",
+}
+
+# Put your logo file in the SAME folder as app.py (recommended)
+# Example: flooring_app/logo.png
+LOGO_PATH = "logo.png"
 
 # =========================
 # DATA (V1: in-code; later load CSV/Google Sheet)
