@@ -403,6 +403,11 @@ if st.session_state.step == 1:
 
 # ---------- STEP 2: QUOTE BUILDER ----------
 if st.session_state.step == 2:
+    with st.expander("Client details (optional)", expanded=False):
+    st.text_input("Client name", key="client_name")
+    st.text_input("Client phone", key="client_phone")
+    st.text_input("Client email", key="client_email")
+    st.text_input("Site address", key="site_address")
     st.subheader("Step 3 — Measurements (mobile friendly)")
 
     def add_room():
