@@ -85,22 +85,35 @@ def money(x: float) -> str:
 # =========================
 # PDF GENERATION
 # =========================
+
 def build_quote_pdf(payload: dict) -> bytes:
+    import io
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.utils import ImageReader
-    
+    from reportlab.pdfgen import canvas
+
     def _rgb(t):
         return colors.Color(t[0], t[1], t[2])
-    
-    # Margins
+
+    def money(x: float) -> str:
+        return f"${x:,.2f}"
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4  # ✅ define width/height first
+
     left = 42
     right = width - 42
-    
-    # ----- Optional logo -----
+    table_w = right - left
+
+    # =========================
+    # WHITE HEADER (logo optional)
+    # =========================
     logo_w, logo_h = 120, 42
     logo_x = left
     logo_y = height - 42 - logo_h
-    
+
     logo_drawn = False
     try:
         logo = ImageReader(LOGO_PATH)
@@ -108,124 +121,80 @@ def build_quote_pdf(payload: dict) -> bytes:
         logo_drawn = True
     except Exception:
         pass
-    
-    # Start Y under header area
+
     y = height - 48
     if logo_drawn:
         y = logo_y - 14
-    
-    # ----- Company block (black text on white) -----
+
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 16)
     c.drawString(left, y, COMPANY["name"])
     y -= 16
-    
+
     c.setFont("Helvetica", 9)
-    c.drawString(left, y, COMPANY["abn"]); y -= 12
-    c.drawString(left, y, f"{COMPANY['phone']}  |  {COMPANY['email']}"); y -= 12
-    c.drawString(left, y, COMPANY.get("website", "")); y -= 18
-    
-    # Separator line
+    c.drawString(left, y, COMPANY.get("abn", "")); y -= 12
+    c.drawString(left, y, f"{COMPANY.get('phone','')}  |  {COMPANY.get('email','')}"); y -= 12
+    if COMPANY.get("website"):
+        c.drawString(left, y, COMPANY.get("website","")); y -= 12
+
+    y -= 6
     c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
     c.setLineWidth(0.8)
     c.line(left, y, right, y)
     y -= 22
 
-    # ===== Header Bar =====
-    y = height - 48
-    
-    # Company Name
+    # =========================
+    # TITLE
+    # =========================
     c.setFont("Helvetica-Bold", 16)
-    c.setFillColor(colors.white)
-    c.drawString(left, y, COMPANY["name"])
-    y -= 16
-    
-    # Company Details (black text)
-    c.setFont("Helvetica", 9)
-    c.drawString(left, y, COMPANY["abn"])
-    y -= 12
-    c.drawString(left, y, f"{COMPANY['phone']}  |  {COMPANY['email']}")
-    y -= 12
-    c.drawString(left, y, COMPANY.get("website", ""))
-    y -= 18
-    
-    # Thin separator line
-    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
-    c.setLineWidth(0.8)
-    c.line(left, y, right, y)
-    y -= 22
-
-    # Logo (optional)
-    logo_w, logo_h = 120, 42
-    logo_x = left
-    logo_y = height - 42 - logo_h  # top margin = 42
-    
-    try:
-        logo = ImageReader(LOGO_PATH)
-        c.drawImage(
-            logo,
-            logo_x,
-            logo_y,
-            width=logo_w,
-            height=logo_h,
-            mask="auto",
-            preserveAspectRatio=True,
-        )
-    except Exception:
-        pass
-
-    # Company details (right side, white)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawRightString(right, height - 22, COMPANY["name"])
-    c.setFont("Helvetica", 9)
-    c.drawRightString(right, height - 38, COMPANY["abn"])
-    c.drawRightString(right, height - 52, f"{COMPANY['phone']}  |  {COMPANY['email']}")
-    c.drawRightString(right, height - 66, COMPANY.get("website", ""))
-
-    # ===== Title =====
-    y = height - header_h - 26
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 18)
     c.drawString(left, y, "Quotation")
-    y -= 8
-    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    y -= 10
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.6)
+    c.line(left, y, right, y)
     y -= 18
 
-    # ===== Client Block =====
+    # =========================
+    # CLIENT DETAILS
+    # =========================
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Client Details")
     y -= 14
 
-    x_label = left
-    x_value = left + 78
+    c.setFont("Helvetica", 10)
+    client_name = payload.get("client_name", "")
+    client_phone = payload.get("client_phone", "")
+    client_email = payload.get("client_email", "")
+    site_address = payload.get("site_address", "")
+    job_mode = payload.get("job_mode", "")
 
-    y = _draw_kv(c, x_label, x_value, y, "Client", payload.get("client_name", ""))
-    y = _draw_kv(c, x_label, x_value, y, "Phone", payload.get("client_phone", ""))
-    y = _draw_kv(c, x_label, x_value, y, "Email", payload.get("client_email", ""))
-    y = _draw_kv(c, x_label, x_value, y, "Site", payload.get("site_address", ""))
-    y = _draw_kv(c, x_label, x_value, y, "Mode", payload.get("job_mode", ""))
+    c.drawString(left, y, f"Client: {client_name}"); y -= 14
+    c.drawString(left, y, f"Phone: {client_phone}"); y -= 14
+    c.drawString(left, y, f"Email: {client_email}"); y -= 14
+    c.drawString(left, y, f"Site: {site_address}"); y -= 14
+    c.drawString(left, y, f"Mode: {job_mode}"); y -= 18
 
-    y -= 6
-    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.6)
+    c.line(left, y, right, y)
     y -= 18
 
-    # ===== Measurements Table =====
+    # =========================
+    # MEASUREMENTS TABLE
+    # =========================
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Measurements")
-    y -= 12
+    y -= 14
 
-    # Table header background
-    table_w = right - left
-    header_row_h = 18
+    header_h = 18
     row_h = 16
 
+    # header background
     c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
-    c.rect(left, y - header_row_h + 4, table_w, header_row_h, stroke=0, fill=1)
+    c.rect(left, y - header_h + 4, table_w, header_h, stroke=0, fill=1)
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 9)
-
     col_room = left + 6
     col_l = left + 250
     col_w = left + 315
@@ -240,47 +209,49 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.setFont("Helvetica", 9)
     rooms = payload.get("rooms", [])
     for idx, r in enumerate(rooms):
-        # alternate row shading
-        if idx % 2 == 0:
-            c.setFillColor(colors.white)
-        else:
+        if idx % 2 == 1:
             c.setFillColor(_rgb((0.98, 0.98, 0.98)))
-        c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
-
+            c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
         c.setFillColor(colors.black)
+
         c.drawString(col_room, y, str(r.get("name", "")))
         c.drawRightString(col_l, y, f"{float(r.get('length', 0.0)):.2f}")
         c.drawRightString(col_w, y, f"{float(r.get('width', 0.0)):.2f}")
         c.drawRightString(col_a, y, f"{float(r.get('area', 0.0)):.2f}")
         y -= row_h
 
-        if y < 210:
+        if y < 220:
             c.showPage()
+            width, height = A4
+            left = 42
+            right = width - 42
+            table_w = right - left
             y = height - 60
+            c.setFont("Helvetica", 9)
 
     y -= 6
     c.setFont("Helvetica", 10)
-    c.drawString(left, y, f"Total area: {payload.get('total_area', 0.0):.2f} m²")
-    y -= 14
-    c.drawString(left, y, f"Wastage: {payload.get('wastage_pct', 0.0):.1f}%")
-    y -= 14
-    c.drawString(left, y, f"Chargeable area: {payload.get('chargeable_area', 0.0):.2f} m²")
-    y -= 16
+    c.drawString(left, y, f"Total area: {payload.get('total_area', 0.0):.2f} m²"); y -= 14
+    c.drawString(left, y, f"Wastage: {payload.get('wastage_pct', 0.0):.1f}%"); y -= 14
+    c.drawString(left, y, f"Chargeable area: {payload.get('chargeable_area', 0.0):.2f} m²"); y -= 18
 
-    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.6)
+    c.line(left, y, right, y)
     y -= 18
 
-    # ===== Pricing Table =====
+    # =========================
+    # PRICING TABLE
+    # =========================
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
-    y -= 12
+    y -= 14
 
     c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
-    c.rect(left, y - header_row_h + 4, table_w, header_row_h, stroke=0, fill=1)
+    c.rect(left, y - header_h + 4, table_w, header_h, stroke=0, fill=1)
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 9)
-
     col_item = left + 6
     col_qty = right - 150
     col_total = right - 6
@@ -293,35 +264,31 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.setFont("Helvetica", 9)
     items = payload.get("line_items", [])
     for idx, li in enumerate(items):
-        if idx % 2 == 0:
-            c.setFillColor(colors.white)
-        else:
+        if idx % 2 == 1:
             c.setFillColor(_rgb((0.98, 0.98, 0.98)))
-        c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
+            c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
 
         c.setFillColor(colors.black)
         label = str(li.get("label", ""))
-        qty_str = str(li.get("qty_str", ""))
-        total_val = float(li.get("total", 0.0))
-
-        # simple wrap for long item names (single wrap line)
-        if len(label) > 60:
-            label = label[:57] + "..."
-
+        if len(label) > 62:
+            label = label[:59] + "..."
         c.drawString(col_item, y, label)
-        c.drawRightString(col_qty, y, qty_str)
-        c.drawRightString(col_total, y, money(total_val))
+        c.drawRightString(col_qty, y, str(li.get("qty_str", "")))
+        c.drawRightString(col_total, y, money(float(li.get("total", 0.0))))
         y -= row_h
 
-        if y < 180:
+        if y < 170:
             c.showPage()
+            width, height = A4
+            left = 42
+            right = width - 42
+            table_w = right - left
             y = height - 60
+            c.setFont("Helvetica", 9)
 
+    # Totals box
     y -= 10
-
-    # ===== Totals box (right aligned) =====
-    box_w = 220
-    box_h = 70
+    box_w, box_h = 220, 70
     box_x = right - box_w
     box_y = y - box_h + 10
 
@@ -345,14 +312,15 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.drawRightString(box_x + box_w - 10, box_y + 12, money(total_inc))
 
     y = box_y - 18
-    _hr(c, left, right, y, BRAND["mid_gray_rgb"])
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.6)
+    c.line(left, y, right, y)
     y -= 16
 
-    # ===== Terms =====
+    # Terms
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Terms")
     y -= 14
-
     c.setFont("Helvetica", 9)
     for t in payload.get("terms", []):
         c.drawString(left, y, f"• {t}")
@@ -360,6 +328,7 @@ def build_quote_pdf(payload: dict) -> bytes:
         if y < 60:
             c.showPage()
             y = height - 60
+            c.setFont("Helvetica", 9)
 
     c.showPage()
     c.save()
