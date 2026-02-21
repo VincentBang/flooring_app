@@ -5,6 +5,23 @@ import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+# =========================
+# COMPANY DETAILS (edit these)
+# =========================
+COMPANY = {
+    "name": "Oz Timber Floor Pty Ltd",
+    "abn": "ABN: 84 168 475 358",
+    "phone": "Phone: 0435 496 975",
+    "email": "Email: info@oztimberfloor.com.au",
+    "website": "Website: oztimberfloor.com.au",
+    "address": "Address line (optional)",
+}
+
+# Put your logo file in the SAME folder as app.py (recommended)
+# Example: flooring_app/logo.png
+LOGO_PATH = "logo.png"
+
+st.caption(f"{COMPANY['name']} • {COMPANY['abn']} •{COMPANY['phone']} • {COMPANY['email']}")
 
 # =========================
 # DATA (V1: in-code; later load CSV/Google Sheet)
