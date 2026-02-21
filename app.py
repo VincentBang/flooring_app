@@ -21,6 +21,14 @@ COMPANY = {
 # Example: flooring_app/logo.png
 LOGO_PATH = "logo.png"
 
+# Brand colors
+BRAND = {
+    "header_rgb": (0.10, 0.10, 0.10),   # dark charcoal
+    "accent_rgb": (0.18, 0.42, 0.78),   # blue accent
+    "light_gray_rgb": (0.94, 0.94, 0.94),
+    "mid_gray_rgb": (0.75, 0.75, 0.75),
+}
+
 st.caption(f"{COMPANY['name']} • {COMPANY['abn']} •{COMPANY['phone']} • {COMPANY['email']}")
 
 # =========================
