@@ -88,30 +88,48 @@ def money(x: float) -> str:
 def build_quote_pdf(payload: dict) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
-
+    
     def _rgb(t):
         return colors.Color(t[0], t[1], t[2])
-
-    def _draw_kv(c, x_label, x_value, y, k, v):
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(x_label, y, f"{k}:")
-        c.setFont("Helvetica", 10)
-        c.drawString(x_value, y, v if v else "")
-        return y - 14
-
-    def _hr(c, x1, x2, y, rgb):
-        c.setStrokeColor(_rgb(rgb))
-        c.setLineWidth(1)
-        c.line(x1, y, x2, y)
-
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-
+    
+    # Margins
     left = 42
     right = width - 42
-    content_top = height - 42
-    y = content_top
+    
+    # ----- Optional logo -----
+    logo_w, logo_h = 120, 42
+    logo_x = left
+    logo_y = height - 42 - logo_h
+    
+    logo_drawn = False
+    try:
+        logo = ImageReader(LOGO_PATH)
+        c.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, mask="auto", preserveAspectRatio=True)
+        logo_drawn = True
+    except Exception:
+        pass
+    
+    # Start Y under header area
+    y = height - 48
+    if logo_drawn:
+        y = logo_y - 14
+    
+    # ----- Company block (black text on white) -----
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(left, y, COMPANY["name"])
+    y -= 16
+    
+    c.setFont("Helvetica", 9)
+    c.drawString(left, y, COMPANY["abn"]); y -= 12
+    c.drawString(left, y, f"{COMPANY['phone']}  |  {COMPANY['email']}"); y -= 12
+    c.drawString(left, y, COMPANY.get("website", "")); y -= 18
+    
+    # Separator line
+    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+    c.setLineWidth(0.8)
+    c.line(left, y, right, y)
+    y -= 22
 
     # ===== Header Bar =====
     y = height - 48
