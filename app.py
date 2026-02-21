@@ -26,7 +26,7 @@ INSTALL_ONLY = [
 
 # Removal types (preset $/m2)
 REMOVAL_TYPES = [
-    {"id": "r1", "name": "Carpet", "remove_per_m2": 12.0},
+    {"id": "r1", "name": "Carpet", "remove_per_m2": 6.0},
     {"id": "r2", "name": "Floating floor", "remove_per_m2": 18.0},
     {"id": "r3", "name": "Glued floor", "remove_per_m2": 28.0},
     {"id": "r4", "name": "Timber", "remove_per_m2": 35.0},
