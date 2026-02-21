@@ -21,6 +21,8 @@ COMPANY = {
 # Example: flooring_app/logo.png
 LOGO_PATH = "logo.png"
 
+st.caption(f"{COMPANY['name']} • {COMPANY['phone']} • {COMPANY['email']}")
+
 # =========================
 # DATA (V1: in-code; later load CSV/Google Sheet)
 # =========================
