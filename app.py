@@ -66,54 +66,106 @@ def money(x: float) -> str:
 # PDF GENERATION
 # =========================
 def build_quote_pdf(payload: dict) -> bytes:
+    from reportlab.lib.utils import ImageReader
+    from reportlab.lib import colors
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
     left = 42
     right = width - 42
-    y = height - 48
 
-    # Header
-    c.setFont("Helvetica-Bold", 16)
+    # ===== Header bar =====
+    header_h = 70
+    c.setFillColorRGB(0.10, 0.10, 0.10)  # dark charcoal
+    c.rect(0, height - header_h, width, header_h, stroke=0, fill=1)
+
+    # Logo (optional)
+    logo_w, logo_h = 120, 40
+    logo_x = left
+    logo_y = height - header_h + (header_h - logo_h) / 2
+
+    try:
+        logo = ImageReader(LOGO_PATH)
+        c.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, mask="auto")
+    except Exception:
+        # If logo missing, just skip (no crash)
+        pass
+
+    # Company text (right)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(right, height - 22, COMPANY["name"])
+    c.setFont("Helvetica", 9)
+    c.drawRightString(right, height - 36, COMPANY["abn"])
+    c.drawRightString(right, height - 48, COMPANY["phone"])
+    c.drawRightString(right, height - 60, COMPANY["email"])
+
+    # ===== Document title =====
+    y = height - header_h - 25
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 18)
     c.drawString(left, y, "QUOTATION")
-    y -= 22
-
-    c.setFont("Helvetica", 10)
-    c.drawString(left, y, f"Client: {payload['client_name']}")
-    y -= 14
-    c.drawString(left, y, f"Phone: {payload['client_phone']}    Email: {payload['client_email']}")
-    y -= 14
-    c.drawString(left, y, f"Site: {payload['site_address']}")
-    y -= 14
-    c.drawString(left, y, f"Mode: {payload['job_mode']}")
     y -= 18
 
-    # Measurements
+    # ===== Client block =====
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(left, y, "Client details")
+    y -= 12
+    c.setFont("Helvetica", 10)
+
+    client_lines = [
+        ("Client", payload["client_name"]),
+        ("Phone", payload["client_phone"]),
+        ("Email", payload["client_email"]),
+        ("Site", payload["site_address"]),
+        ("Mode", payload["job_mode"]),
+    ]
+
+    label_x = left
+    value_x = left + 70
+
+    for k, v in client_lines:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(label_x, y, f"{k}:")
+        c.setFont("Helvetica", 10)
+        c.drawString(value_x, y, str(v))
+        y -= 14
+
+    y -= 8
+
+    # ===== Measurements =====
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Measurements")
     y -= 14
 
+    # table header
+    c.setLineWidth(0.5)
+    c.setStrokeColorRGB(0.75, 0.75, 0.75)
+    c.line(left, y, right, y)
+    y -= 14
+
     c.setFont("Helvetica-Bold", 9)
     c.drawString(left, y, "Room")
-    c.drawString(left + 210, y, "L (m)")
-    c.drawString(left + 260, y, "W (m)")
-    c.drawString(left + 310, y, "Area (m²)")
+    c.drawRightString(left + 250, y, "L (m)")
+    c.drawRightString(left + 310, y, "W (m)")
+    c.drawRightString(left + 380, y, "Area (m²)")
     y -= 10
-    c.setFont("Helvetica", 9)
 
+    c.setFont("Helvetica", 9)
     for r in payload["rooms"]:
         c.drawString(left, y, r["name"])
-        c.drawRightString(left + 245, y, f"{r['length']:.2f}")
-        c.drawRightString(left + 295, y, f"{r['width']:.2f}")
-        c.drawRightString(left + 370, y, f"{r['area']:.2f}")
+        c.drawRightString(left + 250, y, f"{r['length']:.2f}")
+        c.drawRightString(left + 310, y, f"{r['width']:.2f}")
+        c.drawRightString(left + 380, y, f"{r['area']:.2f}")
         y -= 12
-        if y < 160:
+        if y < 180:
             c.showPage()
-            y = height - 48
+            y = height - 60
             c.setFont("Helvetica", 9)
 
-    y -= 6
+    y -= 4
     c.setFont("Helvetica", 10)
     c.drawString(left, y, f"Total area: {payload['total_area']:.2f} m²")
     y -= 14
@@ -122,62 +174,65 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.drawString(left, y, f"Chargeable area: {payload['chargeable_area']:.2f} m²")
     y -= 18
 
-    # Line items
+    # ===== Pricing =====
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
+    y -= 14
+
+    c.setStrokeColorRGB(0.75, 0.75, 0.75)
+    c.line(left, y, right, y)
     y -= 14
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(left, y, "Item")
     c.drawRightString(right - 120, y, "Qty")
-    c.drawRightString(right - 55, y, "Total")
+    c.drawRightString(right, y, "Total")
     y -= 10
-    c.setFont("Helvetica", 9)
 
+    c.setFont("Helvetica", 9)
     for li in payload["line_items"]:
         c.drawString(left, y, li["label"])
         c.drawRightString(right - 120, y, li["qty_str"])
-        c.drawRightString(right - 55, y, money(li["total"]))
+        c.drawRightString(right, y, money(li["total"]))
         y -= 12
-        if y < 120:
+        if y < 140:
             c.showPage()
-            y = height - 48
+            y = height - 60
             c.setFont("Helvetica", 9)
 
-    y -= 10
+    y -= 8
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left, y, "Subtotal (ex GST)")
-    c.drawRightString(right - 55, y, money(payload["subtotal_ex_gst"]))
+    c.drawRightString(right, y, money(payload["subtotal_ex_gst"]))
     y -= 14
 
     c.setFont("Helvetica", 10)
     c.drawString(left, y, "GST")
-    c.drawRightString(right - 55, y, money(payload["gst"]))
-    y -= 14
+    c.drawRightString(right, y, money(payload["gst"]))
+    y -= 16
 
-    c.setFont("Helvetica-Bold", 11)
+    c.setFont("Helvetica-Bold", 12)
     c.drawString(left, y, "Total (inc GST)")
-    c.drawRightString(right - 55, y, money(payload["total_inc_gst"]))
+    c.drawRightString(right, y, money(payload["total_inc_gst"]))
     y -= 18
 
-    # Terms
+    # ===== Terms =====
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left, y, "Terms")
-    y -= 14
+    y -= 12
     c.setFont("Helvetica", 9)
     for t in payload["terms"]:
         c.drawString(left, y, f"• {t}")
         y -= 12
-        if y < 60:
+        if y < 70:
             c.showPage()
-            y = height - 48
+            y = height - 60
             c.setFont("Helvetica", 9)
 
     c.showPage()
     c.save()
     buf.seek(0)
     return buf.read()
-
 
 # =========================
 # UI
