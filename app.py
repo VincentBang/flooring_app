@@ -9,11 +9,11 @@ from reportlab.pdfgen import canvas
 # COMPANY DETAILS (edit these)
 # =========================
 COMPANY = {
-    "name": "YOUR COMPANY NAME PTY LTD",
-    "abn": "ABN: 12 345 678 901",
-    "phone": "Phone: 04xx xxx xxx",
-    "email": "Email: info@yourcompany.com",
-    "website": "Website: yourcompany.com",
+    "name": "Oz Timber Floor Pty Ltd",
+    "abn": "ABN: 84 168 475 358",
+    "phone": "Phone: 0435 496 975",
+    "email": "Email: info@oztimberfloor.com.au",
+    "website": "Website: oztimberfloor.com.au",
     "address": "Address line (optional)",
 }
 
@@ -21,7 +21,7 @@ COMPANY = {
 # Example: flooring_app/logo.png
 LOGO_PATH = "logo.png"
 
-st.caption(f"{COMPANY['Oz Timber Floor Pty Ltd']} • {COMPANY['0435496975']} • {COMPANY['info@oztimberfloor.com.au']}")
+st.caption(f"{COMPANY['name']} • {COMPANY['abn']} •{COMPANY['phone']} • {COMPANY['email']}")
 
 # =========================
 # DATA (V1: in-code; later load CSV/Google Sheet)
