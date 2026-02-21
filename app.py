@@ -352,7 +352,22 @@ if st.session_state.step == 1:
     else:
         st.session_state.skirting_id = None
 
-    if st.button("Next → Measurements & Quote"):
+    client_name = (st.session_state.get("client_name") or "").strip()
+    site_address = (st.session_state.get("site_address") or "").strip()
+    
+    missing = []
+    if not client_name:
+        missing.append("Client name")
+    if not site_address:
+        missing.append("Site address")
+    
+    if missing:
+        st.warning("Please fill: " + ", ".join(missing))
+        can_next = False
+    else:
+        can_next = True
+
+    if st.button("Next → Measurements & Quote", disabled=not can_next):
         st.session_state.step = 2
         st.rerun()
 
