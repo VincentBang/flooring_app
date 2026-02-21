@@ -140,11 +140,19 @@ def build_quote_pdf(payload: dict) -> bytes:
     # Logo (optional)
     logo_w, logo_h = 120, 42
     logo_x = left
-    logo_y = height - header_h + (header_h - logo_h) / 2
-
+    logo_y = height - 42 - logo_h  # top margin = 42
+    
     try:
         logo = ImageReader(LOGO_PATH)
-        c.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, mask="auto", preserveAspectRatio=True)
+        c.drawImage(
+            logo,
+            logo_x,
+            logo_y,
+            width=logo_w,
+            height=logo_h,
+            mask="auto",
+            preserveAspectRatio=True,
+        )
     except Exception:
         pass
 
@@ -159,7 +167,7 @@ def build_quote_pdf(payload: dict) -> bytes:
 
     # ===== Title =====
     y = height - header_h - 26
-    c.setFillColor(colors.black)
+    c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 18)
     c.drawString(left, y, "Quotation")
     y -= 8
