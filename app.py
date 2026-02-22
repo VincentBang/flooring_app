@@ -7,6 +7,18 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 # =========================
+# GOOGLE SHEET CONFIG
+# =========================
+
+SHEET_ID = "10G98m8XHdySRTMWjbAUlQCZMH1NXCD6uca82xN0p4fY"
+
+@st.cache_data(ttl=300)
+def load_sheet(tab_name):
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={tab_name}"
+    df = pd.read_csv(url)
+    return df[df["active"] == True]
+
+# =========================
 # COMPANY DETAILS (edit these)
 # =========================
 COMPANY = {
