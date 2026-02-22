@@ -380,6 +380,11 @@ for k, v in DEFAULTS.items():
 if "rooms" not in st.session_state or not st.session_state.rooms:
     st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
 
+products_df = load_sheet("products")
+install_df = load_sheet("install_only")
+removal_df = load_sheet("removal")
+skirting_df = load_sheet("skirting")
+addons_df = load_sheet("addons")
 
 # ---------- STEP 1 ----------
 if st.session_state.step == 1:
