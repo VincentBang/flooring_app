@@ -536,12 +536,17 @@ if st.session_state.step == 2:
 
     # Core mode
     if st.session_state.job_mode == "Supply & Install":
-        p = find_by_id(PRODUCTS, st.session_state.product_id)
-        st.markdown("#### Supply & Install")
+       # ---- Get product from Google Sheet ----
+        product_row = products_df[
+            products_df["id"] == st.session_state.product_id
+        ].iloc[0]
+        
+        default_price = float(product_row["sell_price"])
+        
         unit_price = st.number_input(
             "Supply & Install price ($/m²)",
             min_value=0.0,
-            value=float(p["sell_per_m2"]),
+            value=default_price,
             step=1.0,
             key="supply_install_price_override",
         )
