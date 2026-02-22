@@ -94,7 +94,12 @@ def line_item(label: str, qty_str: str, total: float) -> dict:
 def money(x: float) -> str:
     return f"${x:,.2f}"
 
-
+def safe_pick_id(df, current_id: str, id_col: str = "id") -> str:
+    ids = df[id_col].astype(str).tolist()
+    if not ids:
+        return ""
+    return current_id if str(current_id) in ids else ids[0]
+    
 # =========================
 # PDF GENERATION
 # =========================
@@ -419,16 +424,20 @@ if st.session_state.step == 1:
     # Core selection
     if st.session_state.job_mode == "Supply & Install":
         # ---- Dynamic product dropdown from Google Sheet ----
-        product_options = products_df["id"].tolist()
+        product_options = products_df["id"].astype(str).tolist()
+
+        # ✅ force session value to valid ID
+        st.session_state.product_id = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
         
         selected_product_id = st.selectbox(
             "Select timber product (Supply & Install)",
             options=product_options,
+            index=product_options.index(st.session_state.product_id),
             format_func=lambda pid: (
-                f"{products_df.loc[products_df['id']==pid,'brand'].values[0]} — "
-                f"{products_df.loc[products_df['id']==pid,'name'].values[0]}"
+                f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
+                f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
             ),
-            key="product_id"
+            key="product_id",
         )
     else:
         st.selectbox(
