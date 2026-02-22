@@ -551,7 +551,7 @@ if st.session_state.step == 2:
             key="supply_install_price_override",
         )
         total = chargeable_area * unit_price
-        line_items.append(line_item(f"Supply & install — {p['brand']} {p['name']}", f"{chargeable_area:.2f} m²", total))
+        line_items.append(line_item(f"Supply & install — {product_row['brand']} {product_row['name']}", f"{chargeable_area:.2f} m²", total))
         subtotal += total
     else:
         ins = find_by_id(INSTALL_ONLY, st.session_state.install_id)
