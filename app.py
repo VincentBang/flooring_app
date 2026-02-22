@@ -546,9 +546,16 @@ if st.session_state.step == 2:
     # Core mode
     if st.session_state.job_mode == "Supply & Install":
        # ---- Get product from Google Sheet ----
-        product_row = products_df[
-            products_df["id"] == st.session_state.product_id
-        ].iloc[0]
+        pid = str(st.session_state.get("product_id", ""))
+
+        match = products_df[products_df["id"].astype(str) == pid]
+        if match.empty:
+            # fallback to first row
+            product_row = products_df.iloc[0]
+        else:
+            product_row = match.iloc[0]
+        
+        default_price = float(product_row["sell_price"])
         
         default_price = float(product_row["sell_price"])
         
