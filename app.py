@@ -1,6 +1,7 @@
 import io
 from typing import List
 
+import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
