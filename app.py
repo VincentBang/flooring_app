@@ -637,6 +637,56 @@ if st.session_state.step == 2:
         line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", total))
         subtotal += total
 
+    # =========================
+    # ADDITIONAL ITEMS (from Google Sheet)
+    # =========================
+    st.markdown("#### Additional Items")
+
+    for _, row in addons_df.iterrows():
+        addon_id = row["id"]
+        label = row["label"]
+        unit = row["unit"]
+        default_price = float(row["price"])
+    
+        if st.checkbox(label, key=f"addon_{addon_id}"):
+    
+            col1, col2 = st.columns(2)
+    
+            with col1:
+                # Auto quantity logic based on unit
+                if unit == "m2":
+                    qty_default = chargeable_area
+                elif unit == "room":
+                    qty_default = len(st.session_state.rooms)
+                else:
+                    qty_default = 1.0
+    
+                qty = st.number_input(
+                    f"Quantity ({unit})",
+                    min_value=0.0,
+                    value=float(qty_default),
+                    key=f"addon_qty_{addon_id}"
+                )
+    
+            with col2:
+                price = st.number_input(
+                    f"Price per {unit}",
+                    min_value=0.0,
+                    value=default_price,
+                    key=f"addon_price_{addon_id}"
+                )
+    
+            total = qty * price
+    
+            line_items.append({
+                "label": label,
+                "qty_str": f"{qty:.2f} {unit}",
+                "total": total
+            })
+    
+            subtotal += total
+
+    
     st.divider()
     gst = subtotal * GST_RATE
     total_inc = subtotal + gst
