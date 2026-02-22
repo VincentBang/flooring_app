@@ -418,11 +418,17 @@ if st.session_state.step == 1:
 
     # Core selection
     if st.session_state.job_mode == "Supply & Install":
-        st.selectbox(
+        # ---- Dynamic product dropdown from Google Sheet ----
+        product_options = products_df["id"].tolist()
+        
+        selected_product_id = st.selectbox(
             "Select timber product (Supply & Install)",
-            options=[p["id"] for p in PRODUCTS],
-            format_func=lambda pid: f"{find_by_id(PRODUCTS, pid)['brand']} — {find_by_id(PRODUCTS, pid)['name']}",
-            key="product_id",
+            options=product_options,
+            format_func=lambda pid: (
+                f"{products_df.loc[products_df['id']==pid,'brand'].values[0]} — "
+                f"{products_df.loc[products_df['id']==pid,'name'].values[0]}"
+            ),
+            key="product_id"
         )
     else:
         st.selectbox(
