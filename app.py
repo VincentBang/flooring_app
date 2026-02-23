@@ -1045,6 +1045,7 @@ if st.session_state.get("step", 1) == 2:
     payload = {
         "client_name": (st.session_state.get("client_name", "") or "").strip(),
         "client_phone": (st.session_state.get("client_phone", "") or "").strip(),
+        "client_phone_norm": norm_phone(st.session_state.get("client_phone","")),
         "client_email": (st.session_state.get("client_email", "") or "").strip(),
         "site_address": (st.session_state.get("site_address", "") or "").strip(),
         "job_mode": st.session_state.get("job_mode", ""),
