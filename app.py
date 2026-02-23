@@ -841,12 +841,25 @@ if st.session_state.step == 2:
     st.divider()
     st.subheader("Step 5 — Generate Quote PDF")
 
+    st.subheader("Payment & Terms")
+
     terms_default = [
         "Quote valid for 7 days.",
+        "",
+        "Payment Terms:",
+        "• A 10% deposit is required to secure the stock and confirm the scheduled installation date.",
+        "• 60% is payable upon delivery of materials and commencement of works on site.",
+        "• The remaining 30% balance is due immediately upon completion of the installation.",
+        "",
         "Variations may apply if site conditions differ from inspection.",
-        "Progress payments may apply for larger jobs.",
     ]
-    terms_text = st.text_area("Terms (one per line)", "\n".join(terms_default), height=120)
+    
+    terms_text = st.text_area(
+        "Terms (one per line — editable)",
+        "\n".join(terms_default),
+        height=180,
+    )
+    
     terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
 
     # Rooms kept for internal payload only (PDF will NOT display them)
