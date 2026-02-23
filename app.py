@@ -593,25 +593,14 @@ if st.session_state.step == 1:
 
 # ---------- STEP 2 ----------
 if st.session_state.step == 2:
-    st.subheader("Step 3 — Measurements (mobile friendly)")
-    st.caption("Measurements are used for pricing only. They will NOT be shown in the PDF.")
 
-    with st.expander("Client details (optional)", expanded=False):
-        st.text_input("Client name", key="client_name")
-        st.text_input("Client phone", key="client_phone")
-        st.text_input("Client email", key="client_email")
-        st.text_input("Site address", key="site_address")
-
-    def add_room():
-        st.session_state.rooms.append({"length": 0.0, "width": 0.0})
-
-    def remove_room(idx: int):
-        if len(st.session_state.rooms) > 1:
-            st.session_state.rooms.pop(idx)
-
+    # ---------- Measurements UI (compact rows) ----------
     st.subheader("Measurements")
-
-    st.markdown("**Length (m) | Width (m) | Area (m²)**")
+    st.caption("Used for pricing only. Measurements will NOT be shown in the PDF.")
+    
+    # Ensure at least 1 room exists (critical)
+    if "rooms" not in st.session_state or not st.session_state.rooms:
+        st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
     
     def add_room():
         st.session_state.rooms.append({"length": 0.0, "width": 0.0})
@@ -620,41 +609,49 @@ if st.session_state.step == 2:
         if len(st.session_state.rooms) > 1:
             st.session_state.rooms.pop(idx)
     
-        for i, room in enumerate(st.session_state.rooms):
-            col1, col2, col3, col4 = st.columns([1, 1, 1, 0.6])
-        
-            with col1:
-                room["length"] = st.number_input(
-                    "Length",
-                    min_value=0.0,
-                    value=float(room.get("length", 0.0)),
-                    step=0.1,
-                    key=f"len_{i}",
-                    label_visibility="collapsed",
-                )
-        
-            with col2:
-                room["width"] = st.number_input(
-                    "Width",
-                    min_value=0.0,
-                    value=float(room.get("width", 0.0)),
-                    step=0.1,
-                    key=f"wid_{i}",
-                    label_visibility="collapsed",
-                )
-        
-            with col3:
-                area = float(room["length"]) * float(room["width"])
-                st.metric("Area", f"{area:.2f}", label_visibility="collapsed")
-        
-            with col4:
-                if len(st.session_state.rooms) > 1:
-                    if st.button("✕", key=f"remove_{i}"):
-                        remove_room(i)
-                        st.rerun()
-        
-        st.button("➕ Add Room", on_click=add_room)
-
+    # Column headers (one heading for all rooms)
+    h1, h2, h3, h4 = st.columns([1, 1, 1, 0.6])
+    h1.markdown("**Length (m)**")
+    h2.markdown("**Width (m)**")
+    h3.markdown("**Area (m²)**")
+    h4.markdown("")
+    
+    for i, room in enumerate(st.session_state.rooms):
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 0.6])
+    
+        with c1:
+            room["length"] = st.number_input(
+                f"Length (m) {i}",
+                min_value=0.0,
+                value=float(room.get("length", 0.0)),
+                step=0.1,
+                key=f"len_{i}",
+                label_visibility="collapsed",
+            )
+    
+        with c2:
+            room["width"] = st.number_input(
+                f"Width (m) {i}",
+                min_value=0.0,
+                value=float(room.get("width", 0.0)),
+                step=0.1,
+                key=f"wid_{i}",
+                label_visibility="collapsed",
+            )
+    
+        with c3:
+            area = float(room["length"]) * float(room["width"])
+            st.write(f"{area:.2f}")  # more reliable than metric in tight rows
+    
+        with c4:
+            if len(st.session_state.rooms) > 1:
+                if st.button("✕", key=f"remove_{i}"):
+                    remove_room(i)
+                    st.rerun()
+    
+    # Add button OUTSIDE the loop so it always shows
+    st.button("➕ Add Room", on_click=add_room)
+    
     total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state.rooms)
     wastage_pct = float(st.session_state.wastage_pct)
     chargeable_area = total_area * (1.0 + wastage_pct / 100.0)
