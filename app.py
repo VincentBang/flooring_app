@@ -121,6 +121,33 @@ def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
     return str(current_id) if str(current_id) in ids else ids[0]
 
 
+def build_mobile_quote_text(payload: dict) -> str:
+    """
+    Mobile-friendly copy/paste quote text.
+    Requirements:
+      - Show: Item | Qty | Price | Total
+      - List all items
+      - Show Subtotal/Total WITHOUT adding GST
+    """
+    def money_txt(x: float) -> str:
+        return f"${float(x):,.2f}"
+
+    lines = []
+    lines.append("Item | Qty | Price | Total")
+
+    for li in payload.get("line_items", []):
+        label = str(li.get("label", "")).strip()
+        qty = str(li.get("qty_str", "")).strip()
+        unit_price = float(li.get("unit_price", 0.0))
+        total = float(li.get("total", 0.0))
+
+        lines.append(f"{label} {qty} {money_txt(unit_price)} {money_txt(total)}")
+
+    subtotal_ex_gst = float(payload.get("subtotal_ex_gst", 0.0))
+    lines.append(f"Subtotal (ex GST) {money_txt(subtotal_ex_gst)}")
+
+    return "\n".join(lines)
+
 # =========================
 # PDF GENERATION
 # =========================
