@@ -302,7 +302,14 @@ def search_quotes(phone=None, address=None):
         return []
 
     r = requests.get(APPS_SCRIPT_URL, params=params, timeout=20)
-    r.raise_for_status()
+
+    # If Apps Script returns HTML/text, show it clearly
+    ct = (r.headers.get("Content-Type") or "").lower()
+    if "application/json" not in ct:
+        # show a short snippet so you can see what it is (login page / error etc.)
+        snippet = (r.text or "")[:800]
+        raise RuntimeError(f"Apps Script did not return JSON. Status={r.status_code}, Content-Type={ct}\n\nFirst 800 chars:\n{snippet}")
+
     return r.json()
 
 
