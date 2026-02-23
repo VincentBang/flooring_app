@@ -171,7 +171,10 @@ def save_quote_to_sheet(payload: dict) -> str:
     quote_id = f"Q-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
     created_at = datetime.datetime.now().isoformat(timespec="seconds")
 
-    snapshot = {
+    record = {
+        "sheet_id": SHEET_ID,
+        "quote_id": quote_id,
+        "created_at": created_at,
         "quote_type": st.session_state.get("quote_type", ""),
         "job_mode": payload.get("job_mode", ""),
         "client_name": payload.get("client_name", ""),
@@ -184,29 +187,8 @@ def save_quote_to_sheet(payload: dict) -> str:
         "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
         "gst": payload.get("gst", 0),
         "total_inc_gst": payload.get("total_inc_gst", 0),
-        "rooms": payload.get("rooms", []),
+        "payload_json": payload,
         "line_items": payload.get("line_items", []),
-        "terms": payload.get("terms", []),
-    }
-
-    record = {
-        "sheet_id": SHEET_ID,
-        "quote_id": quote_id,
-        "created_at": created_at,
-        "quote_type": snapshot["quote_type"],
-        "job_mode": snapshot["job_mode"],
-        "client_name": snapshot["client_name"],
-        "client_phone": snapshot["client_phone"],
-        "client_email": snapshot["client_email"],
-        "site_address": snapshot["site_address"],
-        "total_area": snapshot["total_area"],
-        "chargeable_area": snapshot["chargeable_area"],
-        "wastage_pct": snapshot["wastage_pct"],
-        "subtotal_ex_gst": snapshot["subtotal_ex_gst"],
-        "gst": snapshot["gst"],
-        "total_inc_gst": snapshot["total_inc_gst"],
-        "payload_json": snapshot,
-        "line_items": snapshot["line_items"],
     }
 
     r = requests.post(APPS_SCRIPT_URL, json=record, timeout=15)
