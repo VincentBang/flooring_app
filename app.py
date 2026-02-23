@@ -625,28 +625,7 @@ div[data-testid="stHorizontalBlock"] > div {
 
 # ---- Session defaults ----
 # ---- SAFE SESSION DEFAULTS ----
-DEFAULTS = {
-    "step": 1,
-    "client_name": "",
-    "client_phone": "",
-    "client_email": "",
-    "site_address": "",
-    "job_mode": "Supply & Install",
-    "quote_type": "Retail",
-    "wastage_pct": DEFAULT_WASTAGE_PCT,
-    "product_id": PRODUCTS[0]["id"],
-    "install_id": INSTALL_ONLY[0]["id"],
-    "scope_removal": False,
-    "scope_furniture": False,
-    "scope_skirting": False,
-    "removal_selected": [],
-    "furniture_rate": DEFAULT_FURNITURE_PER_ROOM,
-    "skirting_id": SKIRTING[0]["id"],
-}
 
-for k, v in DEFAULTS.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
 
 # Initialise rooms only once
 if "rooms" not in st.session_state:
