@@ -289,21 +289,33 @@ def save_quote_to_sheet(payload: dict) -> str:
     return quote_id
 
 
-def search_quotes(phone=None, address=None):
-    phone = (phone or "").strip()
-    address = (address or "").strip()
+def norm_phone(s: str) -> str:
+    return re.sub(r"\D+", "", (s or "").strip())
 
-    params = {"sheet_id": SHEET_ID}
-    if phone:
-        params["phone"] = phone
-    elif address:
-        params["address"] = address
+if st.button("Search Quotes"):
+    phone_norm = norm_phone(search_phone)
+    addr = (search_address or "").strip()
+
+    # your rule: search by phone OR address (either, not both)
+    if phone_norm:
+        results = search_quotes(phone=phone_norm, address=None)
+    elif addr:
+        results = search_quotes(phone=None, address=addr)
     else:
-        return []
+        results = []
+        st.warning("Enter a phone or an address to search.")
 
-    r = requests.get(APPS_SCRIPT_URL, params=params, timeout=20)
-    r.raise_for_status()
-    return r.json()
+    if not results:
+        st.warning("No matching quotes found.")
+    else:
+        for r in results:
+            st.markdown(f"**{r.get('quote_id','')}** — {r.get('created_at','')}")
+            if st.button(f"Load {r.get('quote_id','')}", key=f"load_{r.get('quote_id','')}"):
+                snapshot = r.get("payload_json", {}) or {}
+                load_snapshot_into_state(snapshot)
+                st.success("Quote loaded successfully.")
+                st.session_state["step"] = 2
+                st.rerun()
 
 
 def load_snapshot_into_state(snapshot: Dict[str, Any]):
