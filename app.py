@@ -163,30 +163,100 @@ def parse_dims(text: str):
     except Exception:
         return None, None
 
-def save_quote_to_sheet(payload: dict):
-    quote_id = f"Q-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
+import datetime, uuid, requests, json
+
+def save_quote_to_sheet(payload: dict) -> str:
+    quote_id = payload.get("quote_id") or f"Q-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
     created_at = datetime.datetime.now().isoformat(timespec="seconds")
+
+    # ✅ Full restore snapshot: capture important session selections too
+    snapshot = {
+        "quote_id": quote_id,
+        "created_at": created_at,
+
+        # client
+        "client_name": payload.get("client_name", ""),
+        "client_phone": payload.get("client_phone", ""),
+        "client_email": payload.get("client_email", ""),
+        "site_address": payload.get("site_address", ""),
+
+        # mode
+        "job_mode": payload.get("job_mode", ""),
+        "quote_type": st.session_state.get("quote_type", ""),
+
+        # measurements
+        "rooms": payload.get("rooms", []),
+        "total_area": payload.get("total_area", 0),
+        "wastage_pct": payload.get("wastage_pct", 0),
+        "chargeable_area": payload.get("chargeable_area", 0),
+
+        # scope toggles + selections
+        "scope_removal": bool(st.session_state.get("scope_removal", False)),
+        "scope_furniture": bool(st.session_state.get("scope_furniture", False)),
+        "scope_skirting": bool(st.session_state.get("scope_skirting", False)),
+        "removal_selected": st.session_state.get("removal_selected", []),
+        "furniture_rooms_selected": st.session_state.get("furniture_rooms_selected", []),
+        "furniture_rate": st.session_state.get("furniture_rate", 0),
+        "skirting_id": st.session_state.get("skirting_id", ""),
+        "skirting_lm": st.session_state.get("skirting_lm", 0),
+
+        # main selections
+        "product_id": st.session_state.get("product_id", ""),
+        "install_id": st.session_state.get("install_id", ""),
+
+        # overrides (so you can reconstruct exact quote)
+        "supply_install_price_override": st.session_state.get("supply_install_price_override", None),
+        "install_only_price_override": st.session_state.get("install_only_price_override", None),
+        # removal overrides: keep all keys that start with removal_rate_
+        "removal_rate_overrides": {
+            k: st.session_state[k]
+            for k in st.session_state.keys()
+            if str(k).startswith("removal_rate_")
+        },
+        "skirting_price_override": st.session_state.get("skirting_price_override", None),
+        "furniture_rate_override": st.session_state.get("furniture_rate_override", None),
+
+        # addons state: store everything starting with addon_
+        "addons_state": {
+            k: st.session_state[k]
+            for k in st.session_state.keys()
+            if str(k).startswith("addon_") or str(k).startswith("addon_qty_") or str(k).startswith("addon_price_")
+        },
+
+        # output
+        "line_items": payload.get("line_items", []),
+        "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
+        "gst": payload.get("gst", 0),
+        "total_inc_gst": payload.get("total_inc_gst", 0),
+        "terms": payload.get("terms", []),
+    }
 
     record = {
         "sheet_id": SHEET_ID,
         "quote_id": quote_id,
         "created_at": created_at,
-        "quote_type": st.session_state.get("quote_type", ""),
-        "job_mode": payload.get("job_mode", ""),
-        "client_name": payload.get("client_name", ""),
-        "client_phone": payload.get("client_phone", ""),
-        "client_email": payload.get("client_email", ""),
-        "site_address": payload.get("site_address", ""),
-        "total_area": payload.get("total_area", 0),
-        "chargeable_area": payload.get("chargeable_area", 0),
-        "wastage_pct": payload.get("wastage_pct", 0),
-        "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
-        "gst": payload.get("gst", 0),
-        "total_inc_gst": payload.get("total_inc_gst", 0),
-        "line_items": payload.get("line_items", [])
+        "quote_type": snapshot["quote_type"],
+        "job_mode": snapshot["job_mode"],
+        "client_name": snapshot["client_name"],
+        "client_phone": snapshot["client_phone"],
+        "client_email": snapshot["client_email"],
+        "site_address": snapshot["site_address"],
+        "total_area": snapshot["total_area"],
+        "chargeable_area": snapshot["chargeable_area"],
+        "wastage_pct": snapshot["wastage_pct"],
+        "subtotal_ex_gst": snapshot["subtotal_ex_gst"],
+        "gst": snapshot["gst"],
+        "total_inc_gst": snapshot["total_inc_gst"],
+
+        # ✅ full snapshot for restore
+        "payload_json": snapshot,
+
+        # items for quote_items tab
+        "line_items": payload.get("line_items", []),
     }
 
-    requests.post(APPS_SCRIPT_URL, json=record, timeout=15)
+    r = requests.post(APPS_SCRIPT_URL, json=record, timeout=15)
+    r.raise_for_status()
     return quote_id
 
 # =========================
