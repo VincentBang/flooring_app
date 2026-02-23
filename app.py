@@ -12,11 +12,16 @@ from reportlab.pdfgen import canvas
 
 SHEET_ID = "10G98m8XHdySRTMWjbAUlQCZMH1NXCD6uca82xN0p4fY"
 
+
 @st.cache_data(ttl=300)
-def load_sheet(tab_name):
+def load_sheet(tab_name: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={tab_name}"
     df = pd.read_csv(url)
-    return df[df["active"] == True]
+    # Be defensive: some tabs might not have active column while testing
+    if "active" in df.columns:
+        df = df[df["active"] == True]
+    return df
+
 
 # =========================
 # COMPANY DETAILS (edit these)
@@ -31,21 +36,20 @@ COMPANY = {
 }
 
 # Put your logo file in the SAME folder as app.py (recommended)
-# Example: flooring_app/logo.png
 LOGO_PATH = "logo.png"
 
-# Brand colors
+# Brand colors (ReportLab wants 0-1 floats)
 BRAND = {
-    "header_rgb": (0.10, 0.10, 0.10),   # dark charcoal
-    "accent_rgb": (0.18, 0.42, 0.78),   # blue accent
+    "header_rgb": (0.10, 0.10, 0.10),
+    "accent_rgb": (0.18, 0.42, 0.78),
     "light_gray_rgb": (0.94, 0.94, 0.94),
     "mid_gray_rgb": (0.75, 0.75, 0.75),
 }
 
-st.caption(f"{COMPANY['name']} • {COMPANY['abn']} •{COMPANY['phone']} • {COMPANY['email']}")
+st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {COMPANY['email']}")
 
 # =========================
-# DATA (V1: in-code; later load CSV/Google Sheet)
+# FALLBACK DATA (kept for safety)
 # =========================
 PRODUCTS = [
     {"id": "p1", "brand": "BrandA", "name": "Engineered Oak 14mm", "type": "Engineered", "sell_per_m2": 120.0},
@@ -80,32 +84,47 @@ GST_RATE = 0.10
 # =========================
 # HELPERS
 # =========================
+def safe_float(x, default=0.0) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return float(default)
+
+
 def find_by_id(items: List[dict], item_id: str) -> dict:
     for it in items:
-        if it["id"] == item_id:
+        if str(it.get("id")) == str(item_id):
             return it
     raise KeyError(item_id)
 
 
-def line_item(label: str, qty_str: str, total: float) -> dict:
-    return {"label": label, "qty_str": qty_str, "total": float(total)}
+def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
+    """Line item structure used by UI and PDF."""
+    return {
+        "label": str(label),
+        "qty_str": str(qty_str),
+        "unit_price": float(unit_price),
+        "total": float(total),
+    }
 
 
 def money(x: float) -> str:
-    return f"${x:,.2f}"
+    return f"${float(x):,.2f}"
 
-def safe_pick_id(df, current_id: str, id_col: str = "id") -> str:
+
+def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
+    if df is None or df.empty or id_col not in df.columns:
+        return str(current_id or "")
     ids = df[id_col].astype(str).tolist()
     if not ids:
         return ""
-    return current_id if str(current_id) in ids else ids[0]
-    
+    return str(current_id) if str(current_id) in ids else ids[0]
+
+
 # =========================
 # PDF GENERATION
 # =========================
-
 def build_quote_pdf(payload: dict) -> bytes:
-    import io
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.utils import ImageReader
@@ -114,52 +133,90 @@ def build_quote_pdf(payload: dict) -> bytes:
     def _rgb(t):
         return colors.Color(t[0], t[1], t[2])
 
-    def money(x: float) -> str:
-        return f"${x:,.2f}"
+    def money_pdf(x: float) -> str:
+        return f"${float(x):,.2f}"
+
+    def safe_float_pdf(x, default=0.0) -> float:
+        try:
+            return float(x)
+        except Exception:
+            return float(default)
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4  # ✅ define width/height first
+    width, height = A4
 
     left = 42
     right = width - 42
     table_w = right - left
 
+    header_h = 18
+    row_h = 16
+
+    def draw_company_header() -> float:
+        nonlocal c, width, height, left, right
+
+        logo_w, logo_h = 120, 42
+        logo_x = left
+        logo_y = height - 42 - logo_h
+
+        logo_drawn = False
+        try:
+            logo = ImageReader(LOGO_PATH)
+            c.drawImage(
+                logo,
+                logo_x,
+                logo_y,
+                width=logo_w,
+                height=logo_h,
+                mask="auto",
+                preserveAspectRatio=True,
+            )
+            logo_drawn = True
+        except Exception:
+            pass
+
+        y_local = height - 48
+        if logo_drawn:
+            y_local = logo_y - 14
+
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(left, y_local, COMPANY.get("name", ""))
+        y_local -= 16
+
+        c.setFont("Helvetica", 9)
+        if COMPANY.get("abn"):
+            c.drawString(left, y_local, COMPANY.get("abn", ""))
+            y_local -= 12
+
+        c.drawString(left, y_local, f"{COMPANY.get('phone','')}  |  {COMPANY.get('email','')}")
+        y_local -= 12
+
+        if COMPANY.get("website"):
+            c.drawString(left, y_local, COMPANY.get("website", ""))
+            y_local -= 12
+
+        y_local -= 6
+        c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
+        c.setLineWidth(0.8)
+        c.line(left, y_local, right, y_local)
+        y_local -= 22
+        return y_local
+
+    def new_page():
+        nonlocal c, width, height, left, right, table_w
+        c.showPage()
+        c.setPageSize(A4)
+        width, height = A4
+        left = 42
+        right = width - 42
+        table_w = right - left
+
     # =========================
-    # WHITE HEADER (logo optional)
+    # HEADER
     # =========================
-    logo_w, logo_h = 120, 42
-    logo_x = left
-    logo_y = height - 42 - logo_h
-
-    logo_drawn = False
-    try:
-        logo = ImageReader(LOGO_PATH)
-        c.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, mask="auto", preserveAspectRatio=True)
-        logo_drawn = True
-    except Exception:
-        pass
-
-    y = height - 48
-    if logo_drawn:
-        y = logo_y - 14
-
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(left, y, COMPANY["name"])
-    y -= 16
-
-    c.setFont("Helvetica", 9)
-    c.drawString(left, y, COMPANY.get("abn", "")); y -= 12
-    c.drawString(left, y, f"{COMPANY.get('phone','')}  |  {COMPANY.get('email','')}"); y -= 12
-    if COMPANY.get("website"):
-        c.drawString(left, y, COMPANY.get("website","")); y -= 12
-
-    y -= 6
-    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
-    c.setLineWidth(0.8)
-    c.line(left, y, right, y)
-    y -= 22
+    y = draw_company_header()
 
     # =========================
     # TITLE
@@ -186,77 +243,25 @@ def build_quote_pdf(payload: dict) -> bytes:
     site_address = payload.get("site_address", "")
     job_mode = payload.get("job_mode", "")
 
-    c.drawString(left, y, f"Client: {client_name}"); y -= 14
-    c.drawString(left, y, f"Phone: {client_phone}"); y -= 14
-    c.drawString(left, y, f"Email: {client_email}"); y -= 14
-    c.drawString(left, y, f"Site: {site_address}"); y -= 14
-    c.drawString(left, y, f"Mode: {job_mode}"); y -= 18
-
-    c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
-    c.setLineWidth(0.6)
-    c.line(left, y, right, y)
-    y -= 18
-
-    # =========================
-    # MEASUREMENTS TABLE
-    # =========================
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(left, y, "Measurements")
+    c.drawString(left, y, f"Client: {client_name}")
     y -= 14
-
-    header_h = 18
-    row_h = 16
-
-    # header background
-    c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
-    c.rect(left, y - header_h + 4, table_w, header_h, stroke=0, fill=1)
-
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 9)
-    col_room = left + 6
-    col_l = left + 250
-    col_w = left + 315
-    col_a = left + 390
-
-    c.drawString(col_room, y, "Room")
-    c.drawRightString(col_l, y, "L (m)")
-    c.drawRightString(col_w, y, "W (m)")
-    c.drawRightString(col_a, y, "Area (m²)")
-    y -= row_h
-
-    c.setFont("Helvetica", 9)
-    rooms = payload.get("rooms", [])
-    for idx, r in enumerate(rooms):
-        if idx % 2 == 1:
-            c.setFillColor(_rgb((0.98, 0.98, 0.98)))
-            c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
-        c.setFillColor(colors.black)
-
-        c.drawString(col_room, y, str(r.get("name", "")))
-        c.drawRightString(col_l, y, f"{float(r.get('length', 0.0)):.2f}")
-        c.drawRightString(col_w, y, f"{float(r.get('width', 0.0)):.2f}")
-        c.drawRightString(col_a, y, f"{float(r.get('area', 0.0)):.2f}")
-        y -= row_h
-
-        if y < 220:
-            c.showPage()
-            width, height = A4
-            left = 42
-            right = width - 42
-            table_w = right - left
-            y = height - 60
-            c.setFont("Helvetica", 9)
-
-    y -= 6
-    c.setFont("Helvetica", 10)
-    c.drawString(left, y, f"Total area: {payload.get('total_area', 0.0):.2f} m²"); y -= 14
-    c.drawString(left, y, f"Wastage: {payload.get('wastage_pct', 0.0):.1f}%"); y -= 14
-    c.drawString(left, y, f"Chargeable area: {payload.get('chargeable_area', 0.0):.2f} m²"); y -= 18
+    c.drawString(left, y, f"Phone: {client_phone}")
+    y -= 14
+    c.drawString(left, y, f"Email: {client_email}")
+    y -= 14
+    c.drawString(left, y, f"Site: {site_address}")
+    y -= 14
+    c.drawString(left, y, f"Mode: {job_mode}")
+    y -= 18
 
     c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
     c.setLineWidth(0.6)
     c.line(left, y, right, y)
     y -= 18
+
+    # ==========================================================
+    # MEASUREMENTS REMOVED COMPLETELY (as requested)
+    # ==========================================================
 
     # =========================
     # PRICING TABLE
@@ -265,44 +270,68 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.drawString(left, y, "Scope & Pricing (ex GST)")
     y -= 14
 
+    # Header background
     c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
     c.rect(left, y - header_h + 4, table_w, header_h, stroke=0, fill=1)
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 9)
+
     col_item = left + 6
-    col_qty = right - 150
+    col_qty = right - 170
+    col_price = right - 90
     col_total = right - 6
 
     c.drawString(col_item, y, "Item")
     c.drawRightString(col_qty, y, "Qty")
+    c.drawRightString(col_price, y, "Price")
     c.drawRightString(col_total, y, "Total")
     y -= row_h
 
     c.setFont("Helvetica", 9)
     items = payload.get("line_items", [])
+
     for idx, li in enumerate(items):
+        # Page break
+        if y < 120:
+            new_page()
+            y = draw_company_header()
+
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(left, y, "Scope & Pricing (ex GST) (continued)")
+            y -= 14
+
+            c.setFillColor(_rgb(BRAND["light_gray_rgb"]))
+            c.rect(left, y - header_h + 4, table_w, header_h, stroke=0, fill=1)
+
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(col_item, y, "Item")
+            c.drawRightString(col_qty, y, "Qty")
+            c.drawRightString(col_price, y, "Price")
+            c.drawRightString(col_total, y, "Total")
+            y -= row_h
+            c.setFont("Helvetica", 9)
+
         if idx % 2 == 1:
             c.setFillColor(_rgb((0.98, 0.98, 0.98)))
             c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
 
         c.setFillColor(colors.black)
-        label = str(li.get("label", ""))
-        if len(label) > 62:
-            label = label[:59] + "..."
-        c.drawString(col_item, y, label)
-        c.drawRightString(col_qty, y, str(li.get("qty_str", "")))
-        c.drawRightString(col_total, y, money(float(li.get("total", 0.0))))
-        y -= row_h
 
-        if y < 170:
-            c.showPage()
-            width, height = A4
-            left = 42
-            right = width - 42
-            table_w = right - left
-            y = height - 60
-            c.setFont("Helvetica", 9)
+        label = str(li.get("label", ""))
+        if len(label) > 78:
+            label = label[:75] + "..."
+
+        qty_str = str(li.get("qty_str", ""))
+        unit_price = safe_float_pdf(li.get("unit_price", 0.0), 0.0)
+        total = safe_float_pdf(li.get("total", 0.0), 0.0)
+
+        c.drawString(col_item, y, label)
+        c.drawRightString(col_qty, y, qty_str)
+        c.drawRightString(col_price, y, money_pdf(unit_price))
+        c.drawRightString(col_total, y, money_pdf(total))
+        y -= row_h
 
     # Totals box
     y -= 10
@@ -313,21 +342,21 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.setFillColor(_rgb((0.97, 0.97, 0.97)))
     c.rect(box_x, box_y, box_w, box_h, stroke=1, fill=1)
 
-    subtotal = float(payload.get("subtotal_ex_gst", 0.0))
-    gst = float(payload.get("gst", 0.0))
-    total_inc = float(payload.get("total_inc_gst", 0.0))
+    subtotal = safe_float_pdf(payload.get("subtotal_ex_gst", 0.0), 0.0)
+    gst = safe_float_pdf(payload.get("gst", 0.0), 0.0)
+    total_inc = safe_float_pdf(payload.get("total_inc_gst", 0.0), 0.0)
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 10)
     c.drawString(box_x + 10, box_y + 48, "Subtotal (ex GST)")
-    c.drawRightString(box_x + box_w - 10, box_y + 48, money(subtotal))
+    c.drawRightString(box_x + box_w - 10, box_y + 48, money_pdf(subtotal))
 
     c.drawString(box_x + 10, box_y + 30, "GST")
-    c.drawRightString(box_x + box_w - 10, box_y + 30, money(gst))
+    c.drawRightString(box_x + box_w - 10, box_y + 30, money_pdf(gst))
 
     c.setFont("Helvetica-Bold", 11)
     c.drawString(box_x + 10, box_y + 12, "Total (inc GST)")
-    c.drawRightString(box_x + box_w - 10, box_y + 12, money(total_inc))
+    c.drawRightString(box_x + box_w - 10, box_y + 12, money_pdf(total_inc))
 
     y = box_y - 18
     c.setStrokeColor(_rgb(BRAND["mid_gray_rgb"]))
@@ -336,22 +365,27 @@ def build_quote_pdf(payload: dict) -> bytes:
     y -= 16
 
     # Terms
+    if y < 80:
+        new_page()
+        y = draw_company_header()
+
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Terms")
     y -= 14
     c.setFont("Helvetica", 9)
+
     for t in payload.get("terms", []):
+        if y < 60:
+            new_page()
+            y = draw_company_header()
+            c.setFont("Helvetica", 9)
         c.drawString(left, y, f"• {t}")
         y -= 12
-        if y < 60:
-            c.showPage()
-            y = height - 60
-            c.setFont("Helvetica", 9)
 
-    c.showPage()
     c.save()
     buf.seek(0)
     return buf.read()
+
 
 # =========================
 # UI
@@ -359,7 +393,7 @@ def build_quote_pdf(payload: dict) -> bytes:
 st.set_page_config(page_title="Flooring Quote Prototype", layout="centered")
 st.title("📱 Flooring Quote Prototype (V1)")
 
-# ---- Session defaults (THIS fixes your blank PDF issue) ----
+# ---- Session defaults ----
 DEFAULTS = {
     "step": 1,
     "client_name": "",
@@ -385,6 +419,7 @@ for k, v in DEFAULTS.items():
 if "rooms" not in st.session_state or not st.session_state.rooms:
     st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
 
+# Load sheets
 products_df = load_sheet("products")
 install_df = load_sheet("install_only")
 removal_df = load_sheet("removal")
@@ -403,7 +438,6 @@ if st.session_state.step == 1:
         st.text_input("Client email", key="client_email")
         st.text_input("Site address", key="site_address")
 
-    # IMPORTANT: DO NOT assign st.session_state.job_mode manually
     st.radio(
         "Work type",
         ["Supply & Install", "Installation Only"],
@@ -423,22 +457,28 @@ if st.session_state.step == 1:
 
     # Core selection
     if st.session_state.job_mode == "Supply & Install":
-        # ---- Dynamic product dropdown from Google Sheet ----
-        product_options = products_df["id"].astype(str).tolist()
+        # Prefer Google Sheet products if available, else fallback to in-code list
+        if not products_df.empty and "id" in products_df.columns:
+            product_options = products_df["id"].astype(str).tolist()
+            st.session_state.product_id = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
 
-        # ✅ force session value to valid ID
-        st.session_state.product_id = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
-        
-        selected_product_id = st.selectbox(
-            "Select timber product (Supply & Install)",
-            options=product_options,
-            index=product_options.index(st.session_state.product_id),
-            format_func=lambda pid: (
-                f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
-                f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
-            ),
-            key="product_id",
-        )
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=product_options,
+                index=product_options.index(str(st.session_state.product_id)),
+                format_func=lambda pid: (
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
+                ),
+                key="product_id",
+            )
+        else:
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=[p["id"] for p in PRODUCTS],
+                format_func=lambda pid: f"{find_by_id(PRODUCTS, pid)['brand']} — {find_by_id(PRODUCTS, pid)['name']}",
+                key="product_id",
+            )
     else:
         st.selectbox(
             "Select installation type (Installation Only)",
@@ -481,17 +521,15 @@ if st.session_state.step == 1:
             key="skirting_id",
         )
 
-    # ✅ Next button is ALWAYS enabled (no required fields)
     if st.button("Next → Measurements & Quote"):
         st.session_state.step = 2
         st.rerun()
 
-
 # ---------- STEP 2 ----------
 if st.session_state.step == 2:
     st.subheader("Step 3 — Measurements (mobile friendly)")
+    st.caption("Measurements are used for pricing only. They will NOT be shown in the PDF.")
 
-    # Optional: edit client details here too (prevents blank PDFs after refresh)
     with st.expander("Client details (optional)", expanded=False):
         st.text_input("Client name", key="client_name")
         st.text_input("Client phone", key="client_phone")
@@ -511,11 +549,19 @@ if st.session_state.step == 2:
 
         with col1:
             room["length"] = st.number_input(
-                "Length (m)", min_value=0.0, value=float(room.get("length", 0.0)), step=0.1, key=f"len_{i}"
+                "Length (m)",
+                min_value=0.0,
+                value=float(room.get("length", 0.0)),
+                step=0.1,
+                key=f"len_{i}",
             )
         with col2:
             room["width"] = st.number_input(
-                "Width (m)", min_value=0.0, value=float(room.get("width", 0.0)), step=0.1, key=f"wid_{i}"
+                "Width (m)",
+                min_value=0.0,
+                value=float(room.get("width", 0.0)),
+                step=0.1,
+                key=f"wid_{i}",
             )
         with col3:
             st.metric("Area (m²)", f"{float(room['length']) * float(room['width']):.2f}")
@@ -532,10 +578,10 @@ if st.session_state.step == 2:
     chargeable_area = total_area * (1.0 + wastage_pct / 100.0)
 
     st.markdown("---")
-    a, b, c = st.columns(3)
+    a, b, ccol = st.columns(3)
     a.metric("Total area (m²)", f"{total_area:.2f}")
     b.metric("Wastage (%)", f"{wastage_pct:.1f}")
-    c.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
+    ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
     st.divider()
     st.subheader("Step 4 — Quote Items (selected scope only)")
@@ -543,35 +589,52 @@ if st.session_state.step == 2:
     line_items: List[dict] = []
     subtotal = 0.0
 
-    # Core mode
+    # =========================
+    # CORE MODE
+    # =========================
     if st.session_state.job_mode == "Supply & Install":
-       # ---- Get product from Google Sheet ----
-        pid = str(st.session_state.get("product_id", ""))
+        st.markdown("#### Supply & Install")
 
-        match = products_df[products_df["id"].astype(str) == pid]
-        if match.empty:
-            # fallback to first row
-            product_row = products_df.iloc[0]
+        # Prefer sheet-based product row if available
+        unit_price_default = 0.0
+        product_label = "Supply & install"
+
+        if not products_df.empty and "id" in products_df.columns:
+            pid = str(st.session_state.get("product_id", ""))
+            match = products_df[products_df["id"].astype(str) == pid]
+            product_row = match.iloc[0] if not match.empty else products_df.iloc[0]
+
+            # Use sell_price column if present; else try sell_per_m2; else 0
+            if "sell_price" in products_df.columns:
+                unit_price_default = safe_float(product_row.get("sell_price", 0.0), 0.0)
+            elif "sell_per_m2" in products_df.columns:
+                unit_price_default = safe_float(product_row.get("sell_per_m2", 0.0), 0.0)
+
+            brand = str(product_row.get("brand", "")).strip()
+            name = str(product_row.get("name", "")).strip()
+            product_label = f"Supply & install — {brand} {name}".strip()
         else:
-            product_row = match.iloc[0]
-        
-        default_price = float(product_row["sell_price"])
-        
-        default_price = float(product_row["sell_price"])
-        
+            # fallback in-code list
+            p = find_by_id(PRODUCTS, st.session_state.get("product_id", PRODUCTS[0]["id"]))
+            unit_price_default = safe_float(p.get("sell_per_m2", 0.0), 0.0)
+            product_label = f"Supply & install — {p['brand']} {p['name']}"
+
         unit_price = st.number_input(
             "Supply & Install price ($/m²)",
             min_value=0.0,
-            value=default_price,
+            value=float(unit_price_default),
             step=1.0,
             key="supply_install_price_override",
         )
+
         total = chargeable_area * unit_price
-        line_items.append(line_item(f"Supply & install — {product_row['brand']} {product_row['name']}", f"{chargeable_area:.2f} m²", total))
+        line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
         subtotal += total
+
     else:
-        ins = find_by_id(INSTALL_ONLY, st.session_state.install_id)
         st.markdown("#### Installation Only")
+        ins = find_by_id(INSTALL_ONLY, st.session_state.install_id)
+
         unit_price = st.number_input(
             "Installation price ($/m²)",
             min_value=0.0,
@@ -579,27 +642,34 @@ if st.session_state.step == 2:
             step=1.0,
             key="install_only_price_override",
         )
+
         total = total_area * unit_price
-        line_items.append(line_item(ins["name"], f"{total_area:.2f} m²", total))
+        line_items.append(line_item(ins["name"], f"{total_area:.2f} m²", unit_price, total))
         subtotal += total
 
-    # Removal
+    # =========================
+    # REMOVAL
+    # =========================
     if st.session_state.scope_removal:
         st.markdown("#### Floor Removal & Disposal")
         for rid in st.session_state.removal_selected:
             r = find_by_id(REMOVAL_TYPES, rid)
-            rate = st.number_input(
+
+            unit_price = st.number_input(
                 f"{r['name']} removal ($/m²)",
                 min_value=0.0,
                 value=float(r["remove_per_m2"]),
                 step=1.0,
                 key=f"removal_rate_{rid}",
             )
-            total = total_area * rate
-            line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", total))
+
+            total = total_area * unit_price
+            line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", unit_price, total))
             subtotal += total
 
-    # Furniture
+    # =========================
+    # FURNITURE
+    # =========================
     if st.session_state.scope_furniture:
         st.markdown("#### Furniture Handling")
         room_names = [f"Room {i+1}" for i in range(len(st.session_state.rooms))]
@@ -610,31 +680,38 @@ if st.session_state.step == 2:
             key="furniture_rooms_selected",
         )
         rooms_count = len(selected_rooms)
-        rate = st.number_input(
+
+        unit_price = st.number_input(
             "Furniture handling rate ($ per room)",
             min_value=0.0,
             value=float(st.session_state.furniture_rate),
             step=5.0,
             key="furniture_rate_override",
         )
-        total = rooms_count * rate
-        line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", total))
+
+        total = rooms_count * unit_price
+        line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", unit_price, total))
         subtotal += total
 
-    # Skirting
+    # =========================
+    # SKIRTING
+    # =========================
     if st.session_state.scope_skirting:
         st.markdown("#### Skirting")
         sk = find_by_id(SKIRTING, st.session_state.skirting_id)
-        price_lm = st.number_input(
+
+        unit_price = st.number_input(
             "Skirting price ($/lm)",
             min_value=0.0,
             value=float(sk["price_per_lm"]),
             step=1.0,
             key="skirting_price_override",
         )
+
         lm = st.number_input("Total skirting length (lm)", min_value=0.0, value=0.0, step=1.0, key="skirting_lm")
-        total = lm * price_lm
-        line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", total))
+
+        total = lm * unit_price
+        line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", unit_price, total))
         subtotal += total
 
     # =========================
@@ -642,51 +719,51 @@ if st.session_state.step == 2:
     # =========================
     st.markdown("#### Additional Items")
 
-    for _, row in addons_df.iterrows():
-        addon_id = row["id"]
-        label = row["label"]
-        unit = row["unit"]
-        default_price = float(row["price"])
-    
-        if st.checkbox(label, key=f"addon_{addon_id}"):
-    
-            col1, col2 = st.columns(2)
-    
-            with col1:
-                # Auto quantity logic based on unit
-                if unit == "m2":
-                    qty_default = chargeable_area
-                elif unit == "room":
-                    qty_default = len(st.session_state.rooms)
-                else:
-                    qty_default = 1.0
-    
-                qty = st.number_input(
-                    f"Quantity ({unit})",
-                    min_value=0.0,
-                    value=float(qty_default),
-                    key=f"addon_qty_{addon_id}"
-                )
-    
-            with col2:
-                price = st.number_input(
-                    f"Price per {unit}",
-                    min_value=0.0,
-                    value=default_price,
-                    key=f"addon_price_{addon_id}"
-                )
-    
-            total = qty * price
-    
-            line_items.append({
-                "label": label,
-                "qty_str": f"{qty:.2f} {unit}",
-                "total": total
-            })
-    
-            subtotal += total
+    if addons_df is not None and not addons_df.empty:
+        # expected columns: id, label, unit, price
+        for _, row in addons_df.iterrows():
+            addon_id = str(row.get("id", ""))
+            label = str(row.get("label", "")).strip()
+            unit = str(row.get("unit", "")).strip()
+            default_price = safe_float(row.get("price", 0.0), 0.0)
 
-    
+            if not addon_id or not label:
+                continue
+
+            if st.checkbox(label, key=f"addon_{addon_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    if unit == "m2":
+                        qty_default = chargeable_area
+                    elif unit == "room":
+                        qty_default = len(st.session_state.rooms)
+                    else:
+                        qty_default = 1.0
+
+                    qty = st.number_input(
+                        f"Quantity ({unit})",
+                        min_value=0.0,
+                        value=float(qty_default),
+                        step=1.0 if unit in ("room", "each") else 0.1,
+                        key=f"addon_qty_{addon_id}",
+                    )
+
+                with col2:
+                    unit_price = st.number_input(
+                        f"Price per {unit}",
+                        min_value=0.0,
+                        value=float(default_price),
+                        step=1.0,
+                        key=f"addon_price_{addon_id}",
+                    )
+
+                total = qty * unit_price
+                line_items.append(line_item(label, f"{qty:.2f} {unit}", unit_price, total))
+                subtotal += total
+    else:
+        st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
+
     st.divider()
     gst = subtotal * GST_RATE
     total_inc = subtotal + gst
@@ -706,24 +783,29 @@ if st.session_state.step == 2:
     terms_text = st.text_area("Terms (one per line)", "\n".join(terms_default), height=120)
     terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
 
+    # Rooms kept for internal payload only (PDF will NOT display them)
     rooms_out = []
     for i, r in enumerate(st.session_state.rooms):
         rooms_out.append(
-            {"name": f"Room {i+1}", "length": float(r["length"]), "width": float(r["width"]), "area": float(r["length"]) * float(r["width"])}
+            {
+                "name": f"Room {i+1}",
+                "length": float(r["length"]),
+                "width": float(r["width"]),
+                "area": float(r["length"]) * float(r["width"]),
+            }
         )
 
     payload = {
-        # NO "—" fallbacks. Blank is allowed.
         "client_name": (st.session_state.client_name or "").strip(),
         "client_phone": (st.session_state.client_phone or "").strip(),
         "client_email": (st.session_state.client_email or "").strip(),
         "site_address": (st.session_state.site_address or "").strip(),
         "job_mode": st.session_state.job_mode,
-        "rooms": rooms_out,
-        "total_area": total_area,
-        "wastage_pct": wastage_pct,
-        "chargeable_area": chargeable_area,
-        "line_items": line_items,
+        "rooms": rooms_out,  # kept but not displayed in PDF
+        "total_area": total_area,  # kept but not displayed in PDF
+        "wastage_pct": wastage_pct,  # kept but not displayed in PDF
+        "chargeable_area": chargeable_area,  # kept but not displayed in PDF
+        "line_items": line_items,  # now includes unit_price
         "subtotal_ex_gst": subtotal,
         "gst": gst,
         "total_inc_gst": total_inc,
