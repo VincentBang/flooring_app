@@ -1,4 +1,4 @@
-# app.py — paste this whole file
+# app.py — FULL paste-ready file (restores addons + fixes state + fixes payload usage)
 
 import io
 import re
@@ -17,7 +17,7 @@ from reportlab.pdfgen import canvas
 
 
 # =========================
-# PAGE CONFIG (MUST BE FIRST)
+# PAGE CONFIG (MUST BE FIRST & ONLY ONCE)
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 
@@ -50,7 +50,10 @@ DEFAULT_WASTAGE_PCT = 10.0
 DEFAULT_FURNITURE_PER_ROOM = 50.0
 GST_RATE = 0.10
 
-# Fallback data (only used if sheets are empty)
+
+# =========================
+# FALLBACK DATA
+# =========================
 PRODUCTS = [
     {"id": "p1", "brand": "BrandA", "name": "Engineered Oak 14mm", "type": "Engineered", "sell_per_m2": 120.0},
     {"id": "p2", "brand": "BrandB", "name": "Hybrid 6.5mm", "type": "Hybrid", "sell_per_m2": 75.0},
@@ -78,7 +81,7 @@ SKIRTING = [
 
 
 # =========================
-# SHEET LOADER
+# GOOGLE SHEET LOADER
 # =========================
 @st.cache_data(ttl=300)
 def load_sheet(tab_name: str) -> pd.DataFrame:
@@ -113,16 +116,15 @@ def find_by_id(items: List[dict], item_id: str) -> dict:
 
 
 def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
-    return {
-        "label": str(label),
-        "qty_str": str(qty_str),
-        "unit_price": float(unit_price),
-        "total": float(total),
-    }
+    return {"label": str(label), "qty_str": str(qty_str), "unit_price": float(unit_price), "total": float(total)}
 
 
 def money0(x: float) -> str:
     return f"${float(x):,.0f}"
+
+
+def money2(x: float) -> str:
+    return f"${float(x):,.2f}"
 
 
 def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
@@ -152,7 +154,8 @@ def fmt_dims(length: float, width: float) -> str:
 def parse_dims(text: str):
     if not text:
         return None, None
-    s = text.strip().lower().replace("×", "x").replace("*", "x").replace(" ", "").replace(",", "x")
+    s = text.strip().lower()
+    s = s.replace("×", "x").replace("*", "x").replace(" ", "").replace(",", "x")
     m = re.match(r"^(\d+(\.\d+)?)[x](\d+(\.\d+)?)$", s)
     if not m:
         return None, None
@@ -168,72 +171,82 @@ def parse_dims(text: str):
 def ensure_state():
     ss = st.session_state
 
-    # Core nav
     ss.setdefault("step", 1)
 
-    # Job fields
     ss.setdefault("client_name", "")
     ss.setdefault("client_phone", "")
     ss.setdefault("client_email", "")
     ss.setdefault("site_address", "")
+
     ss.setdefault("job_mode", "Supply & Install")
     ss.setdefault("quote_type", "Retail")
 
-    # Scope toggles
     ss.setdefault("scope_removal", False)
     ss.setdefault("scope_furniture", False)
     ss.setdefault("scope_skirting", False)
 
-    # Selections / rates
     ss.setdefault("wastage_pct", float(DEFAULT_WASTAGE_PCT))
     ss.setdefault("removal_selected", [])
     ss.setdefault("furniture_rate", float(DEFAULT_FURNITURE_PER_ROOM))
     ss.setdefault("skirting_id", SKIRTING[0]["id"])
 
-    # Rooms
     ss.setdefault("rooms", [{"length": 0.0, "width": 0.0}])
     if not isinstance(ss["rooms"], list) or len(ss["rooms"]) == 0:
         ss["rooms"] = [{"length": 0.0, "width": 0.0}]
 
-    # Save guards
     ss.setdefault("quote_saved", False)
     ss.setdefault("last_quote_id", "")
+    ss.setdefault("prepared_pdf_bytes", None)
+    ss.setdefault("prepared_txt_bytes", None)
+
+
+def clear_dynamic_keys():
+    ss = st.session_state
+    for k in list(ss.keys()):
+        if (
+            str(k).startswith("dim_")
+            or str(k).startswith("addon_")
+            or str(k).startswith("addon_qty_")
+            or str(k).startswith("addon_price_")
+            or str(k).startswith("removal_rate_")
+        ):
+            del ss[k]
 
 
 def reset_quote():
     ss = st.session_state
-    # Keep only non-quote misc keys
-    for key in list(ss.keys()):
-        if key.startswith("search_"):
-            continue
-        # wipe all quote-related keys
-        if key in (
-            "step",
-            "client_name",
-            "client_phone",
-            "client_email",
-            "site_address",
-            "job_mode",
-            "quote_type",
-            "scope_removal",
-            "scope_furniture",
-            "scope_skirting",
-            "wastage_pct",
-            "removal_selected",
-            "furniture_rate",
-            "skirting_id",
-            "rooms",
-            "quote_saved",
-            "last_quote_id",
-            "product_id",
-            "install_id",
-            "skirting_lm",
-            "furniture_rooms_selected",
-            "supply_install_price_override",
-            "install_only_price_override",
-        ) or key.startswith("dim_") or key.startswith("addon_") or key.startswith("addon_qty_") or key.startswith("addon_price_") or key.startswith("removal_rate_"):
-            del ss[key]
-
+    # wipe quote-related keys
+    keys_to_wipe = [
+        "step",
+        "client_name",
+        "client_phone",
+        "client_email",
+        "site_address",
+        "job_mode",
+        "quote_type",
+        "scope_removal",
+        "scope_furniture",
+        "scope_skirting",
+        "wastage_pct",
+        "removal_selected",
+        "furniture_rate",
+        "skirting_id",
+        "rooms",
+        "quote_saved",
+        "last_quote_id",
+        "product_id",
+        "install_id",
+        "skirting_lm",
+        "furniture_rooms_selected",
+        "supply_install_price_override",
+        "install_only_price_override",
+        "prepared_pdf_bytes",
+        "prepared_txt_bytes",
+    ]
+    for k in keys_to_wipe:
+        if k in ss:
+            del ss[k]
+    clear_dynamic_keys()
     ensure_state()
 
 
@@ -282,12 +295,17 @@ def search_quotes(phone=None, address=None):
 def load_snapshot_into_state(snapshot: Dict[str, Any]):
     ss = st.session_state
 
+    # Client/job
     ss["client_name"] = str(snapshot.get("client_name", "") or "")
     ss["client_phone"] = str(snapshot.get("client_phone", "") or "")
     ss["client_email"] = str(snapshot.get("client_email", "") or "")
     ss["site_address"] = str(snapshot.get("site_address", "") or "")
     ss["job_mode"] = str(snapshot.get("job_mode", "") or ss.get("job_mode", "Supply & Install"))
 
+    # Scope/rates if present
+    ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
+
+    # Rooms
     rooms = snapshot.get("rooms", [])
     restored_rooms = []
     if isinstance(rooms, list) and rooms:
@@ -298,14 +316,13 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
                 continue
     ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
 
+    # Reset save flags
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
+    ss["prepared_pdf_bytes"] = None
+    ss["prepared_txt_bytes"] = None
 
-    # Clear dynamic room keys so UI re-indexes cleanly
-    for k in list(ss.keys()):
-        if str(k).startswith("dim_"):
-            del ss[k]
-
+    clear_dynamic_keys()
     ensure_state()
 
 
@@ -422,8 +439,10 @@ def build_quote_pdf(payload: dict) -> bytes:
         right = width - 42
         table_w = right - left
 
+    # Header
     y = draw_company_header()
 
+    # Title
     c.setFont("Helvetica-Bold", 16)
     c.drawString(left, y, "Quotation")
     y -= 10
@@ -432,6 +451,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 18
 
+    # Client
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Client Details")
     y -= 14
@@ -453,6 +473,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 18
 
+    # Pricing table
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
     y -= 14
@@ -514,6 +535,7 @@ def build_quote_pdf(payload: dict) -> bytes:
         c.drawRightString(col_total, y, money_pdf(total))
         y -= row_h
 
+    # Totals box
     y -= 10
     box_w, box_h = 220, 70
     box_x = right - box_w
@@ -544,6 +566,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 16
 
+    # Terms
     if y < 80:
         new_page()
         y = draw_company_header()
@@ -582,11 +605,16 @@ div[data-testid="stHorizontalBlock"] > div { min-width: 0; }
     unsafe_allow_html=True,
 )
 
+
 # =========================
 # LOAD SHEETS
 # =========================
 products_df = load_sheet("products")
+install_df = load_sheet("install_only")
+removal_df = load_sheet("removal")
+skirting_df = load_sheet("skirting")
 addons_df = load_sheet("addons")
+
 
 # =========================
 # HEADER
@@ -594,15 +622,21 @@ addons_df = load_sheet("addons")
 st.title("📱 Flooring Quote Prototype (V1)")
 st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {COMPANY['email']}")
 
-if st.button("🧼 New Quote (reset)", use_container_width=True):
-    reset_quote()
-    st.rerun()
+top_c1, top_c2 = st.columns([1, 2])
+with top_c1:
+    if st.button("🧼 New Quote (reset)", use_container_width=True):
+        reset_quote()
+        st.rerun()
+with top_c2:
+    st.write("")
+
 
 # =========================
-# RETRIEVE
+# RETRIEVE EXISTING QUOTE
 # =========================
 st.divider()
 st.subheader("Retrieve Existing Quote")
+
 search_phone = st.text_input("Search by phone", key="search_phone")
 search_address = st.text_input("Search by address", key="search_address")
 
@@ -625,18 +659,19 @@ if st.button("Search Quotes"):
                 st.session_state["step"] = 2
                 st.rerun()
 
+
 # =========================
-# STEP 1
+# STEP 1 — JOB SETUP
 # =========================
 if st.session_state.get("step", 1) == 1:
     st.divider()
     st.subheader("Step 1 — Job Setup")
 
-    c1, c2 = st.columns(2)
-    with c1:
+    col1, col2 = st.columns(2)
+    with col1:
         st.text_input("Client name", key="client_name")
         st.text_input("Client phone", key="client_phone")
-    with c2:
+    with col2:
         st.text_input("Client email", key="client_email")
         st.text_input("Site address", key="site_address")
 
@@ -646,27 +681,94 @@ if st.session_state.get("step", 1) == 1:
         horizontal=True,
         key="job_mode",
     )
+
     st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
 
     st.divider()
-    st.subheader("Scope")
+    st.subheader("Step 2 — Select Scope")
     st.checkbox("Include floor removal & disposal", key="scope_removal")
     st.checkbox("Include furniture handling", key="scope_furniture")
     st.checkbox("Include skirting", key="scope_skirting")
 
-    st.number_input("Wastage (%)", min_value=0.0, max_value=25.0, value=float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT)), step=0.5, key="wastage_pct")
+    st.divider()
+
+    # Core selection
+    if st.session_state.get("job_mode") == "Supply & Install":
+        if not products_df.empty and "id" in products_df.columns:
+            product_options = products_df["id"].astype(str).tolist()
+            st.session_state["product_id"] = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
+
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=product_options,
+                index=product_options.index(str(st.session_state["product_id"])),
+                format_func=lambda pid: (
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
+                ),
+                key="product_id",
+            )
+        else:
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=[p["id"] for p in PRODUCTS],
+                format_func=lambda pid: f"{find_by_id(PRODUCTS, pid)['brand']} — {find_by_id(PRODUCTS, pid)['name']}",
+                key="product_id",
+            )
+    else:
+        st.selectbox(
+            "Select installation type (Installation Only)",
+            options=[i["id"] for i in INSTALL_ONLY],
+            format_func=lambda iid: find_by_id(INSTALL_ONLY, iid)["name"],
+            key="install_id",
+        )
+
+    st.number_input(
+        "Wastage (%)",
+        min_value=0.0,
+        max_value=25.0,
+        value=float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT)),
+        step=0.5,
+        key="wastage_pct",
+    )
+
+    if st.session_state.get("scope_removal"):
+        st.multiselect(
+            "Existing floor type(s) to remove",
+            options=[r["id"] for r in REMOVAL_TYPES],
+            format_func=lambda rid: find_by_id(REMOVAL_TYPES, rid)["name"],
+            key="removal_selected",
+        )
+
+    if st.session_state.get("scope_furniture"):
+        st.number_input(
+            "Furniture handling rate ($ per room)",
+            min_value=0.0,
+            value=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
+            step=5.0,
+            key="furniture_rate",
+        )
+
+    if st.session_state.get("scope_skirting"):
+        st.selectbox(
+            "Skirting height",
+            options=[s["id"] for s in SKIRTING],
+            format_func=lambda sid: f"{find_by_id(SKIRTING, sid)['height_mm']}mm",
+            key="skirting_id",
+        )
 
     if st.button("Next → Measurements & Quote", use_container_width=True):
         st.session_state["step"] = 2
         st.rerun()
 
+
 # =========================
-# STEP 2
+# STEP 2 — MEASUREMENTS + QUOTE + OUTPUT
 # =========================
 if st.session_state.get("step", 1) == 2:
-    # Always ensure state exists in this step too
     ensure_state()
 
+    # ---------- Measurements UI ----------
     st.divider()
     st.subheader("Measurements")
     st.caption("Type dimensions like 3.2x4 (metres). Used for pricing only; not shown in the PDF.")
@@ -677,9 +779,7 @@ if st.session_state.get("step", 1) == 2:
     def remove_room(idx: int):
         if len(st.session_state["rooms"]) > 1:
             st.session_state["rooms"].pop(idx)
-            for k in list(st.session_state.keys()):
-                if str(k).startswith("dim_"):
-                    del st.session_state[k]
+            clear_dynamic_keys()
             st.rerun()
 
     h1, h2, h3 = st.columns([2, 1, 0.6], gap="small")
@@ -736,27 +836,213 @@ if st.session_state.get("step", 1) == 2:
     b.metric("Wastage (%)", f"{wastage_pct:.1f}")
     ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
-    # Minimal quote items to keep this file focused on fixing your state bug.
-    line_items: List[dict] = []
-    unit_price = 120.0
-    total = chargeable_area * unit_price
-    line_items.append(line_item("Supply & install — Floor", f"{chargeable_area:.2f} m²", unit_price, total))
+    st.divider()
+    st.subheader("Step 4 — Quote Items (selected scope only)")
 
-    subtotal = total
+    line_items: List[dict] = []
+    subtotal = 0.0
+
+    # =========================
+    # CORE MODE
+    # =========================
+    if st.session_state.get("job_mode") == "Supply & Install":
+        st.markdown("#### Supply & Install")
+
+        unit_price_default = 0.0
+        product_label = "Supply & install"
+
+        if not products_df.empty and "id" in products_df.columns:
+            pid = str(st.session_state.get("product_id", ""))
+            match = products_df[products_df["id"].astype(str) == pid]
+            product_row = match.iloc[0] if not match.empty else products_df.iloc[0]
+
+            if "sell_price" in products_df.columns:
+                unit_price_default = safe_float(product_row.get("sell_price", 0.0), 0.0)
+            elif "sell_per_m2" in products_df.columns:
+                unit_price_default = safe_float(product_row.get("sell_per_m2", 0.0), 0.0)
+
+            brand = str(product_row.get("brand", "")).strip()
+            name = str(product_row.get("name", "")).strip()
+            product_label = f"Supply & install — {brand} {name}".strip()
+        else:
+            p = find_by_id(PRODUCTS, st.session_state.get("product_id", PRODUCTS[0]["id"]))
+            unit_price_default = safe_float(p.get("sell_per_m2", 0.0), 0.0)
+            product_label = f"Supply & install — {p['brand']} {p['name']}"
+
+        unit_price = st.number_input(
+            "Supply & Install price ($/m²)",
+            min_value=0.0,
+            value=float(unit_price_default),
+            step=1.0,
+            key="supply_install_price_override",
+        )
+
+        total = chargeable_area * unit_price
+        line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
+        subtotal += total
+
+    else:
+        st.markdown("#### Installation Only")
+        ins = find_by_id(INSTALL_ONLY, st.session_state.get("install_id", INSTALL_ONLY[0]["id"]))
+
+        unit_price = st.number_input(
+            "Installation price ($/m²)",
+            min_value=0.0,
+            value=float(ins["install_per_m2"]),
+            step=1.0,
+            key="install_only_price_override",
+        )
+
+        total = total_area * unit_price
+        line_items.append(line_item(ins["name"], f"{total_area:.2f} m²", unit_price, total))
+        subtotal += total
+
+    # =========================
+    # REMOVAL
+    # =========================
+    if st.session_state.get("scope_removal"):
+        st.markdown("#### Floor Removal & Disposal")
+        for rid in st.session_state.get("removal_selected", []):
+            r = find_by_id(REMOVAL_TYPES, rid)
+
+            unit_price = st.number_input(
+                f"{r['name']} removal ($/m²)",
+                min_value=0.0,
+                value=float(r["remove_per_m2"]),
+                step=1.0,
+                key=f"removal_rate_{rid}",
+            )
+
+            total = total_area * unit_price
+            line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", unit_price, total))
+            subtotal += total
+
+    # =========================
+    # FURNITURE
+    # =========================
+    if st.session_state.get("scope_furniture"):
+        st.markdown("#### Furniture Handling")
+        room_names = [f"Room {i+1}" for i in range(len(st.session_state["rooms"]))]
+        selected_rooms = st.multiselect(
+            "Select rooms requiring furniture handling",
+            options=room_names,
+            default=room_names,
+            key="furniture_rooms_selected",
+        )
+        rooms_count = len(selected_rooms)
+
+        unit_price = st.number_input(
+            "Furniture handling rate ($ per room)",
+            min_value=0.0,
+            value=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
+            step=5.0,
+            key="furniture_rate_override",
+        )
+
+        total = rooms_count * unit_price
+        line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", unit_price, total))
+        subtotal += total
+
+    # =========================
+    # SKIRTING
+    # =========================
+    if st.session_state.get("scope_skirting"):
+        st.markdown("#### Skirting")
+        sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
+
+        unit_price = st.number_input(
+            "Skirting price ($/lm)",
+            min_value=0.0,
+            value=float(sk["price_per_lm"]),
+            step=1.0,
+            key="skirting_price_override",
+        )
+
+        lm = st.number_input("Total skirting length (lm)", min_value=0.0, value=float(st.session_state.get("skirting_lm", 0.0)), step=1.0, key="skirting_lm")
+
+        total = lm * unit_price
+        line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", unit_price, total))
+        subtotal += total
+
+    # =========================
+    # ADDITIONAL ITEMS (from Google Sheet)
+    # =========================
+    st.markdown("#### Additional Items (Add-ons)")
+
+    if addons_df is not None and not addons_df.empty:
+        for _, row in addons_df.iterrows():
+            addon_id = str(row.get("id", "")).strip()
+            label = str(row.get("label", "")).strip()
+            unit = str(row.get("unit", "")).strip()
+            default_price = safe_float(row.get("price", 0.0), 0.0)
+
+            if not addon_id or not label:
+                continue
+
+            if st.checkbox(label, key=f"addon_{addon_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    if unit == "m2":
+                        qty_default = chargeable_area
+                    elif unit == "room":
+                        qty_default = len(st.session_state["rooms"])
+                    else:
+                        qty_default = 1.0
+
+                    qty = st.number_input(
+                        f"Quantity ({unit})",
+                        min_value=0.0,
+                        value=float(st.session_state.get(f"addon_qty_{addon_id}", qty_default)),
+                        step=1.0 if unit in ("room", "each") else 0.1,
+                        key=f"addon_qty_{addon_id}",
+                    )
+
+                with col2:
+                    unit_price = st.number_input(
+                        f"Price per {unit}",
+                        min_value=0.0,
+                        value=float(st.session_state.get(f"addon_price_{addon_id}", default_price)),
+                        step=1.0,
+                        key=f"addon_price_{addon_id}",
+                    )
+
+                total = qty * unit_price
+                line_items.append(line_item(label, f"{qty:.2f} {unit}", unit_price, total))
+                subtotal += total
+    else:
+        st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
+
+    # Totals
+    st.divider()
     gst = subtotal * GST_RATE
     total_inc = subtotal + gst
 
-    st.divider()
     t1, t2, t3 = st.columns(3)
     t1.metric("Subtotal (ex GST)", money0(subtotal))
     t2.metric("GST", money0(gst))
     t3.metric("Total (inc GST)", money0(total_inc))
 
+    # =========================
+    # STEP 5 — OUTPUT + SAVE
+    # =========================
     st.divider()
-    st.subheader("Save & Generate Quote")
+    st.subheader("Step 5 — Save & Generate Quote")
+    st.subheader("Payment & Terms")
 
-    terms = ["Quote valid for 30 days."]
+    terms_default = [
+        "Quote valid for 30 days.",
+        "",
+        "Payment Terms:",
+        "A 10% deposit is required to secure the stock and confirm the scheduled installation date.",
+        "60% is payable upon delivery of materials and commencement of works on site.",
+        "The remaining 30% balance is due immediately upon completion of the installation.",
+    ]
 
+    terms_text = st.text_area("Terms (one per line — editable)", "\n".join(terms_default), height=180)
+    terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
+
+    # Rooms output
     rooms_out = []
     for i, r in enumerate(st.session_state["rooms"]):
         rooms_out.append(
@@ -768,6 +1054,7 @@ if st.session_state.get("step", 1) == 2:
             }
         )
 
+    # Payload (single source of truth for PDF + save)
     payload = {
         "client_name": (st.session_state.get("client_name", "") or "").strip(),
         "client_phone": (st.session_state.get("client_phone", "") or "").strip(),
@@ -785,14 +1072,42 @@ if st.session_state.get("step", 1) == 2:
         "terms": terms,
     }
 
-    def handle_save():
-        if not st.session_state.get("quote_saved", False):
-            qid = save_quote_to_sheet(payload)
-            st.session_state["quote_saved"] = True
-            st.session_state["last_quote_id"] = qid
-            st.success(f"Quote saved: {qid}")
+    # ---------- DEBUG PANEL (THIS will tell us instantly where the bug is) ----------
+    with st.expander("Debug: payload client fields (must NOT be blank)", expanded=True):
+        st.write(
+            {
+                "client_name": payload["client_name"],
+                "client_phone": payload["client_phone"],
+                "client_email": payload["client_email"],
+                "site_address": payload["site_address"],
+                "job_mode": payload["job_mode"],
+            }
+        )
 
-    col1, col2, col3 = st.columns(3)
+    # Guard: prevent duplicate save
+    st.session_state.setdefault("quote_saved", False)
+
+    def handle_save_now():
+        if not st.session_state.get("quote_saved", False):
+            quote_id = save_quote_to_sheet(payload)
+            st.session_state["quote_saved"] = True
+            st.session_state["last_quote_id"] = quote_id
+            st.success(f"Quote saved: {quote_id}")
+
+    # Prepare bytes flags (reliable download flow)
+    def prepare_pdf():
+        # always save first (if not saved)
+        handle_save_now()
+        st.session_state["prepared_pdf_bytes"] = build_quote_pdf(payload)
+
+    def prepare_txt():
+        handle_save_now()
+        txt = build_mobile_quote_text(payload)
+        st.session_state["prepared_txt_bytes"] = txt.encode("utf-8")
+
+    st.divider()
+    col1, col2, col3, col4 = st.columns(4)
+
     with col1:
         if st.button("← Back", use_container_width=True):
             st.session_state["step"] = 1
@@ -801,19 +1116,31 @@ if st.session_state.get("step", 1) == 2:
     with col2:
         if st.button("💾 Save Quote", use_container_width=True):
             try:
-                handle_save()
+                handle_save_now()
             except Exception as e:
                 st.error(f"Save failed: {e}")
 
     with col3:
-        if st.button("Generate PDF", use_container_width=True):
+        if st.button("Prepare PDF", use_container_width=True):
             try:
-                handle_save()
+                prepare_pdf()
             except Exception as e:
-                st.error(f"Save failed: {e}")
+                st.error(f"Prepare PDF failed: {e}")
 
-        try:
-            pdf_bytes = build_quote_pdf(payload)
+    with col4:
+        if st.button("Prepare TXT", use_container_width=True):
+            try:
+                prepare_txt()
+            except Exception as e:
+                st.error(f"Prepare TXT failed: {e}")
+
+    # Download buttons appear after preparing
+    st.divider()
+    dc1, dc2 = st.columns(2)
+
+    with dc1:
+        pdf_bytes = st.session_state.get("prepared_pdf_bytes")
+        if pdf_bytes:
             st.download_button(
                 "Download Quote.pdf",
                 data=pdf_bytes,
@@ -821,10 +1148,26 @@ if st.session_state.get("step", 1) == 2:
                 mime="application/pdf",
                 use_container_width=True,
             )
-        except Exception as e:
-            st.error(f"PDF generation failed: {e}")
+        else:
+            st.caption("Click 'Prepare PDF' first.")
+
+    with dc2:
+        txt_bytes = st.session_state.get("prepared_txt_bytes")
+        if txt_bytes:
+            st.download_button(
+                "Download Quote.txt",
+                data=txt_bytes,
+                file_name=f"{st.session_state.get('last_quote_id','Quote')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        else:
+            st.caption("Click 'Prepare TXT' first.")
 
     st.divider()
     st.subheader("Mobile-friendly quote (copy/paste)")
-    mobile_text = build_mobile_quote_text(payload)
-    st.text_area("Copy this (ex GST)", value=mobile_text, height=200)
+    st.text_area(
+        "Copy this and paste into SMS/WhatsApp/email (ex GST)",
+        value=build_mobile_quote_text(payload),
+        height=260,
+    )
