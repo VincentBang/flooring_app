@@ -1,11 +1,15 @@
 import io
-from typing import List
 
+from typing import List
 import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+import requests
+import datetime
+import uuid
 
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8dQm5wDnMgUejAt7knJW4lLJq8OyxmqjLCgULlT4Itq8KYiuu3cOCTsI8z44i9SzoFw/exec"
 # =========================
 # GOOGLE SHEET CONFIG
 # =========================
@@ -158,6 +162,32 @@ def parse_dims(text: str):
         return l, w
     except Exception:
         return None, None
+
+def save_quote_to_sheet(payload: dict):
+    quote_id = f"Q-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
+    created_at = datetime.datetime.now().isoformat(timespec="seconds")
+
+    record = {
+        "sheet_id": SHEET_ID,
+        "quote_id": quote_id,
+        "created_at": created_at,
+        "quote_type": st.session_state.get("quote_type", ""),
+        "job_mode": payload.get("job_mode", ""),
+        "client_name": payload.get("client_name", ""),
+        "client_phone": payload.get("client_phone", ""),
+        "client_email": payload.get("client_email", ""),
+        "site_address": payload.get("site_address", ""),
+        "total_area": payload.get("total_area", 0),
+        "chargeable_area": payload.get("chargeable_area", 0),
+        "wastage_pct": payload.get("wastage_pct", 0),
+        "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
+        "gst": payload.get("gst", 0),
+        "total_inc_gst": payload.get("total_inc_gst", 0),
+        "line_items": payload.get("line_items", [])
+    }
+
+    requests.post(APPS_SCRIPT_URL, json=record, timeout=15)
+    return quote_id
 
 # =========================
 # Mobile GENERATION
