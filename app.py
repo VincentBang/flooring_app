@@ -592,6 +592,7 @@ div[data-testid="stHorizontalBlock"] > div {
 """, unsafe_allow_html=True)
 
 # ---- Session defaults ----
+# ---- SAFE SESSION DEFAULTS ----
 DEFAULTS = {
     "step": 1,
     "client_name": "",
@@ -610,12 +611,14 @@ DEFAULTS = {
     "furniture_rate": DEFAULT_FURNITURE_PER_ROOM,
     "skirting_id": SKIRTING[0]["id"],
 }
+
 for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-if "rooms" not in st.session_state or not st.session_state.rooms:
-    st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
+# Initialise rooms only once
+if "rooms" not in st.session_state:
+    st.session_state.rooms = [{"length": 0.0, "width": 0.0}]
 
 # Load sheets
 products_df = load_sheet("products")
