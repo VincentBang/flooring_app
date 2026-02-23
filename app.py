@@ -303,14 +303,19 @@ def search_quotes(phone=None, address=None):
 
     r = requests.get(APPS_SCRIPT_URL, params=params, timeout=20)
 
-    # If Apps Script returns HTML/text, show it clearly
     ct = (r.headers.get("Content-Type") or "").lower()
     if "application/json" not in ct:
-        # show a short snippet so you can see what it is (login page / error etc.)
-        snippet = (r.text or "")[:800]
-        raise RuntimeError(f"Apps Script did not return JSON. Status={r.status_code}, Content-Type={ct}\n\nFirst 800 chars:\n{snippet}")
+        snippet = (r.text or "")[:1200]
+        st.error(f"Apps Script did NOT return JSON.\nStatus: {r.status_code}\nContent-Type: {ct}")
+        st.code(snippet)
+        return []
 
-    return r.json()
+    try:
+        return r.json()
+    except Exception:
+        st.error("Apps Script returned JSON content-type but body is not valid JSON.")
+        st.code((r.text or "")[:1200])
+        return []
 
 
 def load_snapshot_into_state(snapshot: Dict[str, Any]):
