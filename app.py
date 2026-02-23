@@ -157,6 +157,8 @@ def parse_dims(text: str):
     except Exception:
         return None, None
 
+def norm_phone(s: str) -> str:
+    return re.sub(r"\D+", "", (s or "").strip())
 
 # =========================
 # STATE: PERSISTENT KEYS + WIDGET KEYS SEPARATION
