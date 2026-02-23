@@ -120,33 +120,71 @@ def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
         return ""
     return str(current_id) if str(current_id) in ids else ids[0]
 
+# =========================
+# Mobile GENERATION
+# =========================
 
 def build_mobile_quote_text(payload: dict) -> str:
     """
-    Mobile-friendly copy/paste quote text.
-    Requirements:
-      - Show: Item | Qty | Price | Total
-      - List all items
-      - Show Subtotal/Total WITHOUT adding GST
+    Mobile-friendly quote format (ex GST only).
+    PDF is unchanged.
+
+    Output example:
+    Supply & install — Hurfords Blackbutt 14mm
+    46.2 m² x $125 = $5,775
+
+    Total: $5,775
     """
-    def money_txt(x: float) -> str:
-        return f"${float(x):,.2f}"
+    def money0(x: float) -> str:
+        return f"${float(x):,.0f}"
+
+    def qty_pretty(qty_str: str) -> tuple[str, str]:
+        """
+        Convert '46.20 m²' -> ('46.2', 'm²')
+        Convert '2 room(s)' -> ('2', 'room(s)')
+        Convert '1.00 each' -> ('1', 'each')
+        If parsing fails, return raw string as qty with blank unit.
+        """
+        s = (qty_str or "").strip()
+        if not s:
+            return ("", "")
+        parts = s.split()
+        if len(parts) == 1:
+            return (parts[0], "")
+        qty_raw = parts[0]
+        unit = " ".join(parts[1:])
+
+        # Try format numeric quantity nicely
+        try:
+            q = float(qty_raw)
+            # show 0 decimals if integer-like, else 1 decimal
+            if abs(q - round(q)) < 1e-9:
+                qty_fmt = f"{int(round(q))}"
+            else:
+                qty_fmt = f"{q:.1f}"
+            return (qty_fmt, unit)
+        except Exception:
+            return (qty_raw, unit)
 
     lines = []
-    lines.append("Item | Qty | Price | Total")
 
     for li in payload.get("line_items", []):
         label = str(li.get("label", "")).strip()
-        qty = str(li.get("qty_str", "")).strip()
+        qty_str = str(li.get("qty_str", "")).strip()
         unit_price = float(li.get("unit_price", 0.0))
         total = float(li.get("total", 0.0))
 
-        lines.append(f"{label} {qty} {money_txt(unit_price)} {money_txt(total)}")
+        qty_num, qty_unit = qty_pretty(qty_str)
+        qty_display = f"{qty_num} {qty_unit}".strip()
+
+        lines.append(label)
+        lines.append(f"{qty_display} x {money0(unit_price)} = {money0(total)}")
+        lines.append("")  # blank line between items
 
     subtotal_ex_gst = float(payload.get("subtotal_ex_gst", 0.0))
-    lines.append(f"Subtotal (ex GST) {money_txt(subtotal_ex_gst)}")
+    lines.append(f"Total: {money0(subtotal_ex_gst)}")
 
-    return "\n".join(lines)
+    return "\n".join(lines).strip()
 
 # =========================
 # PDF GENERATION
