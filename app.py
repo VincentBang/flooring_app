@@ -657,22 +657,34 @@ if st.button("🧼 New Quote (reset)", use_container_width=True):
 st.divider()
 st.subheader("Retrieve Existing Quote")
 
-search_phone = st.text_input("Search by phone", key="search_phone")
-search_address = st.text_input("Search by address", key="search_address")
+def norm_phone(s: str) -> str:
+    return re.sub(r"\D+", "", (s or "").strip())
 
-if st.button("Search Quotes"):
-    try:
-        results = search_quotes(search_phone, search_address)
-    except Exception as e:
-        st.error(f"Search failed: {e}")
+with st.form("quote_search_form", clear_on_submit=False):
+    search_phone = st.text_input("Search by phone", key="search_phone")
+    search_address = st.text_input("Search by address", key="search_address")
+    submitted = st.form_submit_button("Search", use_container_width=True)
+
+if submitted:
+    phone_norm = norm_phone(search_phone)
+    addr = (search_address or "").strip()
+
+    # phone OR address (either, not both)
+    if phone_norm:
+        results = search_quotes(phone=phone_norm, address=None)
+    elif addr:
+        results = search_quotes(phone=None, address=addr)
+    else:
         results = []
+        st.warning("Enter a phone or an address to search.")
 
     if not results:
         st.warning("No matching quotes found.")
     else:
         for r in results:
-            st.markdown(f"**{r.get('quote_id','')}** — {r.get('created_at','')}")
-            if st.button(f"Load {r.get('quote_id','')}", key=f"load_{r.get('quote_id','')}"):
+            qid = r.get("quote_id", "")
+            st.markdown(f"**{qid}** — {r.get('created_at','')}")
+            if st.button(f"Load {qid}", key=f"load_quote_{qid}"):
                 snapshot = r.get("payload_json", {}) or {}
                 load_snapshot_into_state(snapshot)
                 st.success("Quote loaded successfully.")
