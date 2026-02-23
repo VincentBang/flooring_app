@@ -646,8 +646,6 @@ st.divider()
 st.subheader("Retrieve Existing Quote")
 
 search_phone = st.text_input("Search by phone", key="search_phone")
-search_phone_norm = norm_phone(search_phone)
-results = search_quotes(phone=search_phone_norm, address=search_address)
 search_address = st.text_input("Search by address", key="search_address")
 
 if st.button("Search Quotes"):
