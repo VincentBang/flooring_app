@@ -259,6 +259,9 @@ def save_quote_to_sheet(payload: dict) -> str:
     r.raise_for_status()
     return quote_id
 
+r = requests.post(APPS_SCRIPT_URL, json=record, timeout=15)
+st.write(r.text)
+
 def search_quotes(phone=None, address=None):
     params = {
         "sheet_id": SHEET_ID,
