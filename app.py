@@ -290,7 +290,17 @@ def save_quote_to_sheet(payload: dict) -> str:
 
 
 def search_quotes(phone=None, address=None):
-    params = {"sheet_id": SHEET_ID, "phone": phone or "", "address": address or ""}
+    phone = (phone or "").strip()
+    address = (address or "").strip()
+
+    params = {"sheet_id": SHEET_ID}
+    if phone:
+        params["phone"] = phone
+    elif address:
+        params["address"] = address
+    else:
+        return []
+
     r = requests.get(APPS_SCRIPT_URL, params=params, timeout=20)
     r.raise_for_status()
     return r.json()
