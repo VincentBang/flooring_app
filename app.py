@@ -306,7 +306,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     client_phone = payload.get("client_phone", "")
     client_email = payload.get("client_email", "")
     site_address = payload.get("site_address", "")
-    #job_mode = payload.get("job_mode", "")
+    
 
     c.drawString(left, y, f"Client: {client_name}")
     y -= 14
