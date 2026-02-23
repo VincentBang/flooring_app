@@ -839,12 +839,7 @@ if st.session_state.step == 2:
         "terms": terms,
     }
 
-    colB1, colB2 = st.columns(2)
-    with colB1:
-        if st.button("← Back"):
-            st.session_state.step = 1
-            st.rerun()
-
+    
     colB1, colB2 = st.columns(2)
 
     with colB1:
