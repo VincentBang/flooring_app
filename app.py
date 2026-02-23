@@ -456,7 +456,7 @@ def build_quote_pdf(payload: dict) -> bytes:
 # =========================
 # UI
 # =========================
-st.set_page_config(page_title="Flooring Quote Prototype", layout="centered")
+st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 st.title("📱 Flooring Quote Prototype (V1)")
 
 # ---- Session defaults ----
