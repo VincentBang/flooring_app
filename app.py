@@ -845,14 +845,37 @@ if st.session_state.step == 2:
             st.session_state.step = 1
             st.rerun()
 
+    colB1, colB2 = st.columns(2)
+
+    with colB1:
+        if st.button("← Back"):
+            st.session_state.step = 1
+            st.rerun()
+    
     with colB2:
-        if st.button("Generate PDF"):
-            pdf_bytes = build_quote_pdf(payload)
-            st.success("PDF generated.")
-            st.download_button(
-                "Download Quote.pdf",
-                data=pdf_bytes,
-                file_name="Quote.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+        pdf_bytes = build_quote_pdf(payload)
+        st.download_button(
+            "Download Quote.pdf",
+            data=pdf_bytes,
+            file_name="Quote.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    
+    st.divider()
+    st.subheader("Mobile-friendly quote (copy/paste)")
+    
+    mobile_text = build_mobile_quote_text(payload)
+    st.text_area(
+        "Copy this and paste into SMS/WhatsApp/email (ex GST)",
+        value=mobile_text,
+        height=260,
+    )
+    
+    st.download_button(
+        "Download Quote.txt",
+        data=mobile_text.encode("utf-8"),
+        file_name="Quote.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
