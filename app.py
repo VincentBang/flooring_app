@@ -1061,20 +1061,20 @@ if st.session_state.step == 2:
         )
     
     payload = {
-        "client_name": (st.session_state.client_name or "").strip(),
-        "client_phone": (st.session_state.client_phone or "").strip(),
-        "client_email": (st.session_state.client_email or "").strip(),
-        "site_address": (st.session_state.site_address or "").strip(),
-        "job_mode": st.session_state.job_mode,
-        "rooms": rooms_out,
-        "total_area": total_area,
-        "wastage_pct": wastage_pct,
-        "chargeable_area": chargeable_area,
-        "line_items": line_items,
-        "subtotal_ex_gst": subtotal,
-        "gst": gst,
-        "total_inc_gst": total_inc,
-        "terms": terms,
+    "client_name": (st.session_state.get("client_name") or "").strip(),
+    "client_phone": (st.session_state.get("client_phone") or "").strip(),
+    "client_email": (st.session_state.get("client_email") or "").strip(),
+    "site_address": (st.session_state.get("site_address") or "").strip(),
+    "job_mode": st.session_state.get("job_mode", ""),
+    "rooms": rooms_out,
+    "total_area": total_area,
+    "wastage_pct": wastage_pct,
+    "chargeable_area": chargeable_area,
+    "line_items": line_items,
+    "subtotal_ex_gst": subtotal,
+    "gst": gst,
+    "total_inc_gst": total_inc,
+    "terms": terms,
     }
     
     # Prevent duplicate save per session
