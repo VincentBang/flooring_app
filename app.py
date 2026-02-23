@@ -981,18 +981,16 @@ if st.session_state.step == 2:
     t3.metric("Total (inc GST)", f"${total_inc:,.0f}")
 
     st.divider()
-    st.subheader("Step 5 — Generate Quote PDF")
-
+    st.subheader("Step 5 — Save & Generate Quote")
     st.subheader("Payment & Terms")
-
+    
     terms_default = [
         "Quote valid for 30 days.",
         "",
         "Payment Terms:",
-        "• A 10% deposit is required to secure the stock and confirm the scheduled installation date.",
-        "• 60% is payable upon delivery of materials and commencement of works on site.",
-        "• The remaining 30% balance is due immediately upon completion of the installation.",
-        "",
+        "A 10% deposit is required to secure the stock and confirm the scheduled installation date.",
+        "60% is payable upon delivery of materials and commencement of works on site.",
+        "The remaining 30% balance is due immediately upon completion of the installation.",
     ]
     
     terms_text = st.text_area(
@@ -1002,8 +1000,8 @@ if st.session_state.step == 2:
     )
     
     terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
-
-    # Rooms kept for internal payload only (PDF will NOT display them)
+    
+    # Build rooms output
     rooms_out = []
     for i, r in enumerate(st.session_state.rooms):
         rooms_out.append(
@@ -1014,56 +1012,77 @@ if st.session_state.step == 2:
                 "area": float(r["length"]) * float(r["width"]),
             }
         )
-
+    
     payload = {
         "client_name": (st.session_state.client_name or "").strip(),
         "client_phone": (st.session_state.client_phone or "").strip(),
         "client_email": (st.session_state.client_email or "").strip(),
         "site_address": (st.session_state.site_address or "").strip(),
         "job_mode": st.session_state.job_mode,
-        "rooms": rooms_out,  # kept but not displayed in PDF
-        "total_area": total_area,  # kept but not displayed in PDF
-        "wastage_pct": wastage_pct,  # kept but not displayed in PDF
-        "chargeable_area": chargeable_area,  # kept but not displayed in PDF
-        "line_items": line_items,  # now includes unit_price
+        "rooms": rooms_out,
+        "total_area": total_area,
+        "wastage_pct": wastage_pct,
+        "chargeable_area": chargeable_area,
+        "line_items": line_items,
         "subtotal_ex_gst": subtotal,
         "gst": gst,
         "total_inc_gst": total_inc,
         "terms": terms,
     }
-
     
-    colB1, colB2 = st.columns(2)
-
-    with colB1:
+    # Prevent duplicate save per session
+    if "quote_saved" not in st.session_state:
+        st.session_state.quote_saved = False
+    
+    def handle_save():
+        if not st.session_state.quote_saved:
+            quote_id = save_quote_to_sheet(payload)
+            st.session_state.quote_saved = True
+            st.session_state.last_quote_id = quote_id
+            st.success(f"Quote saved: {quote_id}")
+    
+    st.divider()
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         if st.button("← Back"):
             st.session_state.step = 1
             st.rerun()
     
-    with colB2:
-        pdf_bytes = build_quote_pdf(payload)
-        st.download_button(
-            "Download Quote.pdf",
-            data=pdf_bytes,
-            file_name="Quote.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+    with col2:
+        if st.button("💾 Save Quote"):
+            handle_save()
+    
+    with col3:
+        if st.button("Download Quote.pdf"):
+            handle_save()
+            pdf_bytes = build_quote_pdf(payload)
+            st.download_button(
+                "Click to Download PDF",
+                data=pdf_bytes,
+                file_name=f"{st.session_state.get('last_quote_id','Quote')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
     
     st.divider()
     st.subheader("Mobile-friendly quote (copy/paste)")
     
     mobile_text = build_mobile_quote_text(payload)
+    
     st.text_area(
         "Copy this and paste into SMS/WhatsApp/email (ex GST)",
         value=mobile_text,
         height=260,
     )
     
-    st.download_button(
-        "Download Quote.txt",
-        data=mobile_text.encode("utf-8"),
-        file_name="Quote.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+    if st.button("Download Quote.txt"):
+        handle_save()
+        st.download_button(
+            "Click to Download TXT",
+            data=mobile_text.encode("utf-8"),
+            file_name=f"{st.session_state.get('last_quote_id','Quote')}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
