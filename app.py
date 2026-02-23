@@ -1,5 +1,3 @@
-# app.py — FULL paste-ready file (restores addons + fixes state + fixes payload usage)
-
 import io
 import re
 import uuid
@@ -9,7 +7,6 @@ from typing import List, Dict, Any
 import pandas as pd
 import requests
 import streamlit as st
-
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -17,17 +14,18 @@ from reportlab.pdfgen import canvas
 
 
 # =========================
-# PAGE CONFIG (MUST BE FIRST & ONLY ONCE)
+# PAGE CONFIG (ONLY ONCE, FIRST)
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 
 
-# =========================
-# CONFIG
-# =========================
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8dQm5wDnMgUejAt7knJW4lLJq8OyxmqjLCgULlT4Itq8KYiuu3cOCTsI8z44i9SzoFw/exec"
 SHEET_ID = "10G98m8XHdySRTMWjbAUlQCZMH1NXCD6uca82xN0p4fY"
 
+
+# =========================
+# COMPANY DETAILS
+# =========================
 COMPANY = {
     "name": "Oz Timber Floor Pty Ltd",
     "abn": "ABN: 84 168 475 358",
@@ -36,7 +34,6 @@ COMPANY = {
     "website": "Website: oztimberfloor.com.au",
     "address": "Address line (optional)",
 }
-
 LOGO_PATH = "logo.png"
 
 BRAND = {
@@ -52,7 +49,7 @@ GST_RATE = 0.10
 
 
 # =========================
-# FALLBACK DATA
+# FALLBACK DATA (SAFETY)
 # =========================
 PRODUCTS = [
     {"id": "p1", "brand": "BrandA", "name": "Engineered Oak 14mm", "type": "Engineered", "sell_per_m2": 120.0},
@@ -81,7 +78,7 @@ SKIRTING = [
 
 
 # =========================
-# GOOGLE SHEET LOADER
+# GOOGLE SHEET LOAD
 # =========================
 @st.cache_data(ttl=300)
 def load_sheet(tab_name: str) -> pd.DataFrame:
@@ -123,10 +120,6 @@ def money0(x: float) -> str:
     return f"${float(x):,.0f}"
 
 
-def money2(x: float) -> str:
-    return f"${float(x):,.2f}"
-
-
 def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
     if df is None or df.empty or id_col not in df.columns:
         return str(current_id or "")
@@ -166,13 +159,15 @@ def parse_dims(text: str):
 
 
 # =========================
-# HARD STATE ENSURE (RUNS EVERY RERUN)
+# STATE: PERSISTENT KEYS + WIDGET KEYS SEPARATION
 # =========================
+PERSIST_CLIENT_KEYS = ["client_name", "client_phone", "client_email", "site_address"]
+
 def ensure_state():
     ss = st.session_state
-
     ss.setdefault("step", 1)
 
+    # Persistent (non-widget) quote fields
     ss.setdefault("client_name", "")
     ss.setdefault("client_phone", "")
     ss.setdefault("client_email", "")
@@ -181,76 +176,79 @@ def ensure_state():
     ss.setdefault("job_mode", "Supply & Install")
     ss.setdefault("quote_type", "Retail")
 
+    ss.setdefault("wastage_pct", float(DEFAULT_WASTAGE_PCT))
     ss.setdefault("scope_removal", False)
     ss.setdefault("scope_furniture", False)
     ss.setdefault("scope_skirting", False)
 
-    ss.setdefault("wastage_pct", float(DEFAULT_WASTAGE_PCT))
     ss.setdefault("removal_selected", [])
     ss.setdefault("furniture_rate", float(DEFAULT_FURNITURE_PER_ROOM))
     ss.setdefault("skirting_id", SKIRTING[0]["id"])
 
     ss.setdefault("rooms", [{"length": 0.0, "width": 0.0}])
-    if not isinstance(ss["rooms"], list) or len(ss["rooms"]) == 0:
+    if not isinstance(ss["rooms"], list) or not ss["rooms"]:
         ss["rooms"] = [{"length": 0.0, "width": 0.0}]
 
     ss.setdefault("quote_saved", False)
     ss.setdefault("last_quote_id", "")
-    ss.setdefault("prepared_pdf_bytes", None)
-    ss.setdefault("prepared_txt_bytes", None)
+
+ensure_state()
 
 
 def clear_dynamic_keys():
     ss = st.session_state
     for k in list(ss.keys()):
-        if (
-            str(k).startswith("dim_")
-            or str(k).startswith("addon_")
-            or str(k).startswith("addon_qty_")
-            or str(k).startswith("addon_price_")
-            or str(k).startswith("removal_rate_")
-        ):
+        if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "removal_rate_")):
             del ss[k]
 
 
 def reset_quote():
     ss = st.session_state
-    # wipe quote-related keys
-    keys_to_wipe = [
+    # Remove only quote-related stuff, keep search inputs if you want
+    keys_to_remove = [
         "step",
-        "client_name",
-        "client_phone",
-        "client_email",
-        "site_address",
-        "job_mode",
-        "quote_type",
-        "scope_removal",
-        "scope_furniture",
-        "scope_skirting",
+        "client_name", "client_phone", "client_email", "site_address",
+        "job_mode", "quote_type",
         "wastage_pct",
+        "scope_removal", "scope_furniture", "scope_skirting",
         "removal_selected",
         "furniture_rate",
         "skirting_id",
         "rooms",
-        "quote_saved",
-        "last_quote_id",
-        "product_id",
-        "install_id",
+        "product_id", "install_id",
         "skirting_lm",
         "furniture_rooms_selected",
         "supply_install_price_override",
         "install_only_price_override",
-        "prepared_pdf_bytes",
-        "prepared_txt_bytes",
+        "quote_saved",
+        "last_quote_id",
     ]
-    for k in keys_to_wipe:
+    for k in keys_to_remove:
+        if k in ss:
+            del ss[k]
+    # Remove Step1 widget keys too (input-only keys)
+    for k in ["client_name_input", "client_phone_input", "client_email_input", "site_address_input"]:
         if k in ss:
             del ss[k]
     clear_dynamic_keys()
     ensure_state()
 
 
-ensure_state()
+def sync_persistent_from_widget(persist_key: str, widget_key: str):
+    # Called on widget change: copy into persistent key
+    st.session_state[persist_key] = (st.session_state.get(widget_key, "") or "").strip()
+
+
+def bind_client_input(label: str, persist_key: str, widget_key: str):
+    # IMPORTANT: widget uses *widget_key* (so it can be pruned safely)
+    # persistent value stored in *persist_key* (never pruned)
+    st.text_input(
+        label,
+        value=st.session_state.get(persist_key, ""),
+        key=widget_key,
+        on_change=sync_persistent_from_widget,
+        kwargs={"persist_key": persist_key, "widget_key": widget_key},
+    )
 
 
 # =========================
@@ -266,16 +264,19 @@ def save_quote_to_sheet(payload: dict) -> str:
         "created_at": created_at,
         "quote_type": st.session_state.get("quote_type", ""),
         "job_mode": payload.get("job_mode", ""),
+
         "client_name": payload.get("client_name", ""),
         "client_phone": payload.get("client_phone", ""),
         "client_email": payload.get("client_email", ""),
         "site_address": payload.get("site_address", ""),
+
         "total_area": payload.get("total_area", 0),
         "chargeable_area": payload.get("chargeable_area", 0),
         "wastage_pct": payload.get("wastage_pct", 0),
         "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
         "gst": payload.get("gst", 0),
         "total_inc_gst": payload.get("total_inc_gst", 0),
+
         "payload_json": payload,
         "line_items": payload.get("line_items", []),
     }
@@ -295,14 +296,13 @@ def search_quotes(phone=None, address=None):
 def load_snapshot_into_state(snapshot: Dict[str, Any]):
     ss = st.session_state
 
-    # Client/job
+    # Restore persistent fields
     ss["client_name"] = str(snapshot.get("client_name", "") or "")
     ss["client_phone"] = str(snapshot.get("client_phone", "") or "")
     ss["client_email"] = str(snapshot.get("client_email", "") or "")
     ss["site_address"] = str(snapshot.get("site_address", "") or "")
-    ss["job_mode"] = str(snapshot.get("job_mode", "") or ss.get("job_mode", "Supply & Install"))
 
-    # Scope/rates if present
+    ss["job_mode"] = str(snapshot.get("job_mode", "") or ss.get("job_mode", "Supply & Install"))
     ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
 
     # Rooms
@@ -316,20 +316,26 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
                 continue
     ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
 
-    # Reset save flags
+    # Reset save flag so you can resave
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
-    ss["prepared_pdf_bytes"] = None
-    ss["prepared_txt_bytes"] = None
+
+    # Remove widget keys so Step1 reflects restored persistent values
+    for k in ["client_name_input", "client_phone_input", "client_email_input", "site_address_input"]:
+        if k in ss:
+            del ss[k]
 
     clear_dynamic_keys()
     ensure_state()
 
 
 # =========================
-# MOBILE TEXT
+# MOBILE TEXT OUTPUT
 # =========================
 def build_mobile_quote_text(payload: dict) -> str:
+    def money0(x: float) -> str:
+        return f"${float(x):,.0f}"
+
     def qty_pretty(qty_str: str) -> tuple[str, str]:
         s = (qty_str or "").strip()
         if not s:
@@ -369,7 +375,7 @@ def build_mobile_quote_text(payload: dict) -> str:
 
 
 # =========================
-# PDF
+# PDF OUTPUT
 # =========================
 def build_quote_pdf(payload: dict) -> bytes:
     def _rgb(t):
@@ -439,10 +445,8 @@ def build_quote_pdf(payload: dict) -> bytes:
         right = width - 42
         table_w = right - left
 
-    # Header
     y = draw_company_header()
 
-    # Title
     c.setFont("Helvetica-Bold", 16)
     c.drawString(left, y, "Quotation")
     y -= 10
@@ -451,7 +455,6 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 18
 
-    # Client
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Client Details")
     y -= 14
@@ -473,7 +476,6 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 18
 
-    # Pricing table
     c.setFont("Helvetica-Bold", 11)
     c.drawString(left, y, "Scope & Pricing (ex GST)")
     y -= 14
@@ -521,7 +523,6 @@ def build_quote_pdf(payload: dict) -> bytes:
             c.rect(left, y - 12, table_w, row_h, stroke=0, fill=1)
 
         c.setFillColor(colors.black)
-
         label = str(li.get("label", ""))
         if len(label) > 78:
             label = label[:75] + "..."
@@ -535,7 +536,6 @@ def build_quote_pdf(payload: dict) -> bytes:
         c.drawRightString(col_total, y, money_pdf(total))
         y -= row_h
 
-    # Totals box
     y -= 10
     box_w, box_h = 220, 70
     box_x = right - box_w
@@ -566,7 +566,6 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.line(left, y, right, y)
     y -= 16
 
-    # Terms
     if y < 80:
         new_page()
         y = draw_company_header()
@@ -622,13 +621,9 @@ addons_df = load_sheet("addons")
 st.title("📱 Flooring Quote Prototype (V1)")
 st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {COMPANY['email']}")
 
-top_c1, top_c2 = st.columns([1, 2])
-with top_c1:
-    if st.button("🧼 New Quote (reset)", use_container_width=True):
-        reset_quote()
-        st.rerun()
-with top_c2:
-    st.write("")
+if st.button("🧼 New Quote (reset)", use_container_width=True):
+    reset_quote()
+    st.rerun()
 
 
 # =========================
@@ -664,16 +659,15 @@ if st.button("Search Quotes"):
 # STEP 1 — JOB SETUP
 # =========================
 if st.session_state.get("step", 1) == 1:
-    st.divider()
     st.subheader("Step 1 — Job Setup")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.text_input("Client name", key="client_name")
-        st.text_input("Client phone", key="client_phone")
+        bind_client_input("Client name", "client_name", "client_name_input")
+        bind_client_input("Client phone", "client_phone", "client_phone_input")
     with col2:
-        st.text_input("Client email", key="client_email")
-        st.text_input("Site address", key="site_address")
+        bind_client_input("Client email", "client_email", "client_email_input")
+        bind_client_input("Site address", "site_address", "site_address_input")
 
     st.radio(
         "Work type",
@@ -692,7 +686,6 @@ if st.session_state.get("step", 1) == 1:
 
     st.divider()
 
-    # Core selection
     if st.session_state.get("job_mode") == "Supply & Install":
         if not products_df.empty and "id" in products_df.columns:
             product_options = products_df["id"].astype(str).tolist()
@@ -758,6 +751,12 @@ if st.session_state.get("step", 1) == 1:
         )
 
     if st.button("Next → Measurements & Quote", use_container_width=True):
+        # ALSO sync once on Next (covers if user typed but didn't blur input)
+        sync_persistent_from_widget("client_name", "client_name_input")
+        sync_persistent_from_widget("client_phone", "client_phone_input")
+        sync_persistent_from_widget("client_email", "client_email_input")
+        sync_persistent_from_widget("site_address", "site_address_input")
+
         st.session_state["step"] = 2
         st.rerun()
 
@@ -768,10 +767,11 @@ if st.session_state.get("step", 1) == 1:
 if st.session_state.get("step", 1) == 2:
     ensure_state()
 
-    # ---------- Measurements UI ----------
-    st.divider()
     st.subheader("Measurements")
     st.caption("Type dimensions like 3.2x4 (metres). Used for pricing only; not shown in the PDF.")
+
+    if "rooms" not in st.session_state or not st.session_state["rooms"]:
+        st.session_state["rooms"] = [{"length": 0.0, "width": 0.0}]
 
     def add_room():
         st.session_state["rooms"].append({"length": 0.0, "width": 0.0})
@@ -779,7 +779,9 @@ if st.session_state.get("step", 1) == 2:
     def remove_room(idx: int):
         if len(st.session_state["rooms"]) > 1:
             st.session_state["rooms"].pop(idx)
-            clear_dynamic_keys()
+            for k in list(st.session_state.keys()):
+                if str(k).startswith("dim_"):
+                    del st.session_state[k]
             st.rerun()
 
     h1, h2, h3 = st.columns([2, 1, 0.6], gap="small")
@@ -842,9 +844,7 @@ if st.session_state.get("step", 1) == 2:
     line_items: List[dict] = []
     subtotal = 0.0
 
-    # =========================
     # CORE MODE
-    # =========================
     if st.session_state.get("job_mode") == "Supply & Install":
         st.markdown("#### Supply & Install")
 
@@ -897,9 +897,7 @@ if st.session_state.get("step", 1) == 2:
         line_items.append(line_item(ins["name"], f"{total_area:.2f} m²", unit_price, total))
         subtotal += total
 
-    # =========================
     # REMOVAL
-    # =========================
     if st.session_state.get("scope_removal"):
         st.markdown("#### Floor Removal & Disposal")
         for rid in st.session_state.get("removal_selected", []):
@@ -917,9 +915,7 @@ if st.session_state.get("step", 1) == 2:
             line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", unit_price, total))
             subtotal += total
 
-    # =========================
     # FURNITURE
-    # =========================
     if st.session_state.get("scope_furniture"):
         st.markdown("#### Furniture Handling")
         room_names = [f"Room {i+1}" for i in range(len(st.session_state["rooms"]))]
@@ -943,9 +939,7 @@ if st.session_state.get("step", 1) == 2:
         line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", unit_price, total))
         subtotal += total
 
-    # =========================
     # SKIRTING
-    # =========================
     if st.session_state.get("scope_skirting"):
         st.markdown("#### Skirting")
         sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
@@ -964,11 +958,8 @@ if st.session_state.get("step", 1) == 2:
         line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", unit_price, total))
         subtotal += total
 
-    # =========================
-    # ADDITIONAL ITEMS (from Google Sheet)
-    # =========================
-    st.markdown("#### Additional Items (Add-ons)")
-
+    # ADDONS
+    st.markdown("#### Additional Items")
     if addons_df is not None and not addons_df.empty:
         for _, row in addons_df.iterrows():
             addon_id = str(row.get("id", "")).strip()
@@ -1013,22 +1004,18 @@ if st.session_state.get("step", 1) == 2:
     else:
         st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
 
-    # Totals
+    # TOTALS
     st.divider()
     gst = subtotal * GST_RATE
     total_inc = subtotal + gst
-
     t1, t2, t3 = st.columns(3)
     t1.metric("Subtotal (ex GST)", money0(subtotal))
     t2.metric("GST", money0(gst))
     t3.metric("Total (inc GST)", money0(total_inc))
 
-    # =========================
-    # STEP 5 — OUTPUT + SAVE
-    # =========================
+    # STEP 5
     st.divider()
     st.subheader("Step 5 — Save & Generate Quote")
-    st.subheader("Payment & Terms")
 
     terms_default = [
         "Quote valid for 30 days.",
@@ -1038,11 +1025,9 @@ if st.session_state.get("step", 1) == 2:
         "60% is payable upon delivery of materials and commencement of works on site.",
         "The remaining 30% balance is due immediately upon completion of the installation.",
     ]
-
     terms_text = st.text_area("Terms (one per line — editable)", "\n".join(terms_default), height=180)
     terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
 
-    # Rooms output
     rooms_out = []
     for i, r in enumerate(st.session_state["rooms"]):
         rooms_out.append(
@@ -1054,7 +1039,7 @@ if st.session_state.get("step", 1) == 2:
             }
         )
 
-    # Payload (single source of truth for PDF + save)
+    # IMPORTANT: payload uses PERSISTENT client keys (not widget keys)
     payload = {
         "client_name": (st.session_state.get("client_name", "") or "").strip(),
         "client_phone": (st.session_state.get("client_phone", "") or "").strip(),
@@ -1072,102 +1057,68 @@ if st.session_state.get("step", 1) == 2:
         "terms": terms,
     }
 
-    # ---------- DEBUG PANEL (THIS will tell us instantly where the bug is) ----------
-    with st.expander("Debug: payload client fields (must NOT be blank)", expanded=True):
+    # Debug (keep this until you confirm fixed)
+    with st.expander("DEBUG — client fields in payload (must NOT be blank)", expanded=True):
         st.write(
             {
                 "client_name": payload["client_name"],
                 "client_phone": payload["client_phone"],
                 "client_email": payload["client_email"],
                 "site_address": payload["site_address"],
-                "job_mode": payload["job_mode"],
             }
         )
 
-    # Guard: prevent duplicate save
     st.session_state.setdefault("quote_saved", False)
 
-    def handle_save_now():
+    def handle_save():
         if not st.session_state.get("quote_saved", False):
-            quote_id = save_quote_to_sheet(payload)
+            qid = save_quote_to_sheet(payload)
             st.session_state["quote_saved"] = True
-            st.session_state["last_quote_id"] = quote_id
-            st.success(f"Quote saved: {quote_id}")
+            st.session_state["last_quote_id"] = qid
+            st.success(f"Quote saved: {qid}")
 
-    # Prepare bytes flags (reliable download flow)
-    def prepare_pdf():
-        # always save first (if not saved)
-        handle_save_now()
-        st.session_state["prepared_pdf_bytes"] = build_quote_pdf(payload)
-
-    def prepare_txt():
-        handle_save_now()
-        txt = build_mobile_quote_text(payload)
-        st.session_state["prepared_txt_bytes"] = txt.encode("utf-8")
-
-    st.divider()
-    col1, col2, col3, col4 = st.columns(4)
-
+    col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("← Back", use_container_width=True):
+        if st.button("← Back"):
             st.session_state["step"] = 1
             st.rerun()
 
     with col2:
-        if st.button("💾 Save Quote", use_container_width=True):
+        if st.button("💾 Save Quote"):
             try:
-                handle_save_now()
+                handle_save()
             except Exception as e:
                 st.error(f"Save failed: {e}")
 
     with col3:
-        if st.button("Prepare PDF", use_container_width=True):
+        if st.button("Generate PDF & Download"):
             try:
-                prepare_pdf()
+                handle_save()
+                pdf_bytes = build_quote_pdf(payload)
+                st.download_button(
+                    "Click to Download PDF",
+                    data=pdf_bytes,
+                    file_name=f"{st.session_state.get('last_quote_id','Quote')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
             except Exception as e:
-                st.error(f"Prepare PDF failed: {e}")
+                st.error(f"PDF failed: {e}")
 
-    with col4:
-        if st.button("Prepare TXT", use_container_width=True):
-            try:
-                prepare_txt()
-            except Exception as e:
-                st.error(f"Prepare TXT failed: {e}")
-
-    # Download buttons appear after preparing
     st.divider()
-    dc1, dc2 = st.columns(2)
+    st.subheader("Mobile-friendly quote (copy/paste)")
+    mobile_text = build_mobile_quote_text(payload)
+    st.text_area("Copy this and paste into SMS/WhatsApp/email (ex GST)", value=mobile_text, height=260)
 
-    with dc1:
-        pdf_bytes = st.session_state.get("prepared_pdf_bytes")
-        if pdf_bytes:
+    if st.button("Download Quote.txt"):
+        try:
+            handle_save()
             st.download_button(
-                "Download Quote.pdf",
-                data=pdf_bytes,
-                file_name=f"{st.session_state.get('last_quote_id','Quote')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        else:
-            st.caption("Click 'Prepare PDF' first.")
-
-    with dc2:
-        txt_bytes = st.session_state.get("prepared_txt_bytes")
-        if txt_bytes:
-            st.download_button(
-                "Download Quote.txt",
-                data=txt_bytes,
+                "Click to Download TXT",
+                data=mobile_text.encode("utf-8"),
                 file_name=f"{st.session_state.get('last_quote_id','Quote')}.txt",
                 mime="text/plain",
                 use_container_width=True,
             )
-        else:
-            st.caption("Click 'Prepare TXT' first.")
-
-    st.divider()
-    st.subheader("Mobile-friendly quote (copy/paste)")
-    st.text_area(
-        "Copy this and paste into SMS/WhatsApp/email (ex GST)",
-        value=build_mobile_quote_text(payload),
-        height=260,
-    )
+        except Exception as e:
+            st.error(f"TXT failed: {e}")
