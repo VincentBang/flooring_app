@@ -609,34 +609,50 @@ if st.session_state.step == 2:
         if len(st.session_state.rooms) > 1:
             st.session_state.rooms.pop(idx)
 
-    for i, room in enumerate(st.session_state.rooms):
-        st.markdown(f"### Room {i+1}")
-        col1, col2, col3 = st.columns([1, 1, 1])
+    st.subheader("Measurements")
 
+st.markdown("**Length (m) | Width (m) | Area (m²)**")
+
+def add_room():
+    st.session_state.rooms.append({"length": 0.0, "width": 0.0})
+
+def remove_room(idx: int):
+    if len(st.session_state.rooms) > 1:
+        st.session_state.rooms.pop(idx)
+
+    for i, room in enumerate(st.session_state.rooms):
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 0.6])
+    
         with col1:
             room["length"] = st.number_input(
-                "Length (m)",
+                "Length",
                 min_value=0.0,
                 value=float(room.get("length", 0.0)),
                 step=0.1,
                 key=f"len_{i}",
+                label_visibility="collapsed",
             )
+    
         with col2:
             room["width"] = st.number_input(
-                "Width (m)",
+                "Width",
                 min_value=0.0,
                 value=float(room.get("width", 0.0)),
                 step=0.1,
                 key=f"wid_{i}",
+                label_visibility="collapsed",
             )
+    
         with col3:
-            st.metric("Area (m²)", f"{float(room['length']) * float(room['width']):.2f}")
-
-        if len(st.session_state.rooms) > 1:
-            if st.button("Remove", key=f"remove_room_{i}"):
-                remove_room(i)
-                st.rerun()
-
+            area = float(room["length"]) * float(room["width"])
+            st.metric("Area", f"{area:.2f}", label_visibility="collapsed")
+    
+        with col4:
+            if len(st.session_state.rooms) > 1:
+                if st.button("✕", key=f"remove_{i}"):
+                    remove_room(i)
+                    st.rerun()
+    
     st.button("➕ Add Room", on_click=add_room)
 
     total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state.rooms)
