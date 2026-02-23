@@ -458,6 +458,33 @@ def build_quote_pdf(payload: dict) -> bytes:
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 st.title("📱 Flooring Quote Prototype (V1)")
+st.markdown("""
+<style>
+/* Reduce padding so columns fit on mobile */
+.block-container { padding-top: 1rem; padding-bottom: 1rem; }
+
+/* Make number inputs more compact */
+div[data-testid="stNumberInput"] input {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.95rem;
+}
+
+/* Reduce label spacing */
+label[data-testid="stWidgetLabel"] {
+  margin-bottom: 0.1rem;
+}
+
+/* Try to keep columns from stacking too early */
+div[data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap !important;
+}
+
+/* Allow horizontal scroll instead of stacking if needed */
+div[data-testid="stHorizontalBlock"] > div {
+  min-width: 0;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---- Session defaults ----
 DEFAULTS = {
@@ -598,7 +625,6 @@ if st.session_state.step == 2:
     st.subheader("Measurements")
     st.caption("Used for pricing only. Measurements will NOT be shown in the PDF.")
     
-    # Ensure at least 1 room exists (critical)
     if "rooms" not in st.session_state or not st.session_state.rooms:
         st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
     
@@ -609,39 +635,38 @@ if st.session_state.step == 2:
         if len(st.session_state.rooms) > 1:
             st.session_state.rooms.pop(idx)
     
-    # Column headers (one heading for all rooms)
-    h1, h2, h3, h4 = st.columns([1, 1, 1, 0.6])
+    # headers
+    h1, h2, h3, h4 = st.columns([1, 1, 1, 0.5], gap="small")
     h1.markdown("**Length (m)**")
     h2.markdown("**Width (m)**")
     h3.markdown("**Area (m²)**")
     h4.markdown("")
     
     for i, room in enumerate(st.session_state.rooms):
-        c1, c2, c3, c4 = st.columns([1, 1, 1, 0.6])
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 0.5], gap="small")
     
         with c1:
             room["length"] = st.number_input(
-                f"Length (m) {i}",
+                "Length",
                 min_value=0.0,
                 value=float(room.get("length", 0.0)),
                 step=0.1,
                 key=f"len_{i}",
                 label_visibility="collapsed",
             )
-    
         with c2:
             room["width"] = st.number_input(
-                f"Width (m) {i}",
+                "Width",
                 min_value=0.0,
                 value=float(room.get("width", 0.0)),
                 step=0.1,
                 key=f"wid_{i}",
                 label_visibility="collapsed",
             )
-    
         with c3:
             area = float(room["length"]) * float(room["width"])
-            st.write(f"{area:.2f}")  # more reliable than metric in tight rows
+            # st.write is more mobile-stable than st.metric in columns
+            st.markdown(f"<div style='padding-top:0.55rem;font-size:1rem;'>{area:.2f}</div>", unsafe_allow_html=True)
     
         with c4:
             if len(st.session_state.rooms) > 1:
@@ -649,9 +674,8 @@ if st.session_state.step == 2:
                     remove_room(i)
                     st.rerun()
     
-    # Add button OUTSIDE the loop so it always shows
     st.button("➕ Add Room", on_click=add_room)
-    
+        
     total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state.rooms)
     wastage_pct = float(st.session_state.wastage_pct)
     chargeable_area = total_area * (1.0 + wastage_pct / 100.0)
