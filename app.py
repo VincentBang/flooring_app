@@ -259,6 +259,17 @@ def save_quote_to_sheet(payload: dict) -> str:
     r.raise_for_status()
     return quote_id
 
+def search_quotes(phone=None, address=None):
+    params = {
+        "sheet_id": SHEET_ID,
+        "phone": phone or "",
+        "address": address or ""
+    }
+
+    r = requests.get(APPS_SCRIPT_URL, params=params, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
 # =========================
 # Mobile GENERATION
 # =========================
