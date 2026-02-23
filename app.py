@@ -545,6 +545,56 @@ def build_quote_pdf(payload: dict) -> bytes:
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 st.title("📱 Flooring Quote Prototype (V1)")
+
+st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
+st.title("📱 Flooring Quote Prototype (V1)")
+
+# ---- SAFE SESSION DEFAULTS ----
+if "step" not in st.session_state:
+    st.session_state.step = 1
+
+if "client_name" not in st.session_state:
+    st.session_state.client_name = ""
+
+if "client_phone" not in st.session_state:
+    st.session_state.client_phone = ""
+
+if "client_email" not in st.session_state:
+    st.session_state.client_email = ""
+
+if "site_address" not in st.session_state:
+    st.session_state.site_address = ""
+
+if "job_mode" not in st.session_state:
+    st.session_state.job_mode = "Supply & Install"
+
+if "quote_type" not in st.session_state:
+    st.session_state.quote_type = "Retail"
+
+if "wastage_pct" not in st.session_state:
+    st.session_state.wastage_pct = DEFAULT_WASTAGE_PCT
+
+if "scope_removal" not in st.session_state:
+    st.session_state.scope_removal = False
+
+if "scope_furniture" not in st.session_state:
+    st.session_state.scope_furniture = False
+
+if "scope_skirting" not in st.session_state:
+    st.session_state.scope_skirting = False
+
+if "removal_selected" not in st.session_state:
+    st.session_state.removal_selected = []
+
+if "furniture_rate" not in st.session_state:
+    st.session_state.furniture_rate = DEFAULT_FURNITURE_PER_ROOM
+
+if "skirting_id" not in st.session_state:
+    st.session_state.skirting_id = SKIRTING[0]["id"]
+
+if "rooms" not in st.session_state:
+    st.session_state.rooms = [{"length": 0.0, "width": 0.0}]
+
 st.markdown("""
 <style>
 /* Reduce padding so columns fit on mobile */
