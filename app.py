@@ -669,6 +669,32 @@ removal_df = load_sheet("removal")
 skirting_df = load_sheet("skirting")
 addons_df = load_sheet("addons")
 
+st.divider()
+st.subheader("Retrieve Existing Quote")
+
+search_phone = st.text_input("Search by phone")
+search_address = st.text_input("Search by address")
+
+if st.button("Search Quotes"):
+    results = search_quotes(search_phone, search_address)
+
+    if not results:
+        st.warning("No matching quotes found.")
+    else:
+        for r in results:
+            st.markdown(f"**{r['quote_id']}** — {r['created_at']}")
+            if st.button(f"Load {r['quote_id']}", key=r["quote_id"]):
+                snapshot = r["payload_json"]
+
+                # Restore snapshot into session_state
+                for k, v in snapshot.items():
+                    st.session_state[k] = v
+
+                st.success("Quote loaded successfully.")
+                st.session_state.step = 2
+                st.rerun()
+
+
 # ---------- STEP 1 ----------
 if st.session_state.step == 1:
     st.subheader("Step 1 — Job Setup")
