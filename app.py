@@ -269,6 +269,7 @@ def save_quote_to_sheet(payload: dict) -> str:
 
         "client_name": payload.get("client_name", ""),
         "client_phone": payload.get("client_phone", ""),
+        "client_phone_norm": payload.get("client_phone_norm",""),
         "client_email": payload.get("client_email", ""),
         "site_address": payload.get("site_address", ""),
 
