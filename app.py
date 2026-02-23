@@ -120,6 +120,45 @@ def safe_pick_id(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
         return ""
     return str(current_id) if str(current_id) in ids else ids[0]
 
+import re
+
+def _fmt_num(x: float) -> str:
+    """Nice display: 3 -> '3', 3.2 -> '3.2'"""
+    x = float(x)
+    if abs(x - round(x)) < 1e-9:
+        return str(int(round(x)))
+    return f"{x:.1f}".rstrip("0").rstrip(".")
+
+def fmt_dims(length: float, width: float) -> str:
+    """If both 0 -> blank, else 'LxW'."""
+    l = float(length or 0.0)
+    w = float(width or 0.0)
+    if l == 0.0 and w == 0.0:
+        return ""
+    return f"{_fmt_num(l)}x{_fmt_num(w)}"
+
+def parse_dims(text: str):
+    """
+    Parse '3.2x4', '3.2 x 4', '3.2*4', '3.2×4', '3.2,4'
+    Returns (length, width) or (None, None) if invalid.
+    """
+    if not text:
+        return None, None
+    s = text.strip().lower()
+    s = s.replace("×", "x").replace("*", "x").replace(" ", "")
+    # allow comma as separator too
+    s = s.replace(",", "x")
+    # Extract two numbers separated by 'x'
+    m = re.match(r"^(\d+(\.\d+)?)[x](\d+(\.\d+)?)$", s)
+    if not m:
+        return None, None
+    try:
+        l = float(m.group(1))
+        w = float(m.group(3))
+        return l, w
+    except Exception:
+        return None, None
+
 # =========================
 # Mobile GENERATION
 # =========================
@@ -623,56 +662,71 @@ if st.session_state.step == 2:
 
     # ---------- Measurements UI (compact rows) ----------
     st.subheader("Measurements")
-    st.caption("Used for pricing only. Measurements will NOT be shown in the PDF.")
+    st.caption("Type dimensions like 3.2x4 (metres). Measurements are used for pricing only and won't show in the PDF.")
     
+    # Ensure at least 1 room exists (starts empty)
     if "rooms" not in st.session_state or not st.session_state.rooms:
-        st.session_state.rooms = [{"length": 3.0, "width": 4.0}]
+        st.session_state.rooms = [{"length": 0.0, "width": 0.0}]
     
     def add_room():
         st.session_state.rooms.append({"length": 0.0, "width": 0.0})
+        # also create an empty input key for the new row (helps Streamlit)
+        new_i = len(st.session_state.rooms) - 1
+        st.session_state[f"dim_{new_i}"] = ""
     
     def remove_room(idx: int):
         if len(st.session_state.rooms) > 1:
             st.session_state.rooms.pop(idx)
+            # Best-effort cleanup of keys; then rerun to re-index dim_ keys
+            for k in list(st.session_state.keys()):
+                if k.startswith("dim_") or k.startswith("len_") or k.startswith("wid_"):
+                    pass
+            st.rerun()
     
-    # headers
-    h1, h2, h3, h4 = st.columns([1, 1, 1, 0.5], gap="small")
-    h1.markdown("**Length (m)**")
-    h2.markdown("**Width (m)**")
-    h3.markdown("**Area (m²)**")
-    h4.markdown("")
+    # Header row (one heading only)
+    h1, h2, h3 = st.columns([2, 1, 0.6], gap="small")
+    h1.markdown("**Length x Width (m)**")
+    h2.markdown("**Area (m²)**")
+    h3.markdown("")
     
+    # Rows
     for i, room in enumerate(st.session_state.rooms):
-        c1, c2, c3, c4 = st.columns([1, 1, 1, 0.5], gap="small")
+        # Initialize the input field from stored values ONLY if key not yet set
+        dim_key = f"dim_{i}"
+        if dim_key not in st.session_state:
+            st.session_state[dim_key] = fmt_dims(room.get("length", 0.0), room.get("width", 0.0))
+    
+        c1, c2, c3 = st.columns([2, 1, 0.6], gap="small")
     
         with c1:
-            room["length"] = st.number_input(
-                "Length",
-                min_value=0.0,
-                value=float(room.get("length", 0.0)),
-                step=0.1,
-                key=f"len_{i}",
+            s = st.text_input(
+                "Dimensions",
+                key=dim_key,
+                placeholder="e.g. 3.2x4",
                 label_visibility="collapsed",
-            )
+            ).strip()
+    
+            # If user cleared it, set room dims to 0
+            if s == "":
+                room["length"] = 0.0
+                room["width"] = 0.0
+            else:
+                l, w = parse_dims(s)
+                if l is not None and w is not None:
+                    room["length"] = l
+                    room["width"] = w
+                    # Normalize display to a clean format (keeps non-zero visible & editable)
+                    st.session_state[dim_key] = fmt_dims(l, w)
+                # If invalid text, do NOT overwrite existing room values (keeps last valid)
+    
         with c2:
-            room["width"] = st.number_input(
-                "Width",
-                min_value=0.0,
-                value=float(room.get("width", 0.0)),
-                step=0.1,
-                key=f"wid_{i}",
-                label_visibility="collapsed",
-            )
-        with c3:
-            area = float(room["length"]) * float(room["width"])
-            # st.write is more mobile-stable than st.metric in columns
+            area = float(room.get("length", 0.0)) * float(room.get("width", 0.0))
             st.markdown(f"<div style='padding-top:0.55rem;font-size:1rem;'>{area:.2f}</div>", unsafe_allow_html=True)
     
-        with c4:
+        with c3:
             if len(st.session_state.rooms) > 1:
                 if st.button("✕", key=f"remove_{i}"):
                     remove_room(i)
-                    st.rerun()
     
     st.button("➕ Add Room", on_click=add_room)
         
