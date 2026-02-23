@@ -844,14 +844,13 @@ if st.session_state.step == 2:
     st.subheader("Payment & Terms")
 
     terms_default = [
-        "Quote valid for 7 days.",
+        "Quote valid for 30 days.",
         "",
         "Payment Terms:",
         "• A 10% deposit is required to secure the stock and confirm the scheduled installation date.",
         "• 60% is payable upon delivery of materials and commencement of works on site.",
         "• The remaining 30% balance is due immediately upon completion of the installation.",
         "",
-        "Variations may apply if site conditions differ from inspection.",
     ]
     
     terms_text = st.text_area(
