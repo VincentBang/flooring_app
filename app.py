@@ -866,16 +866,10 @@ st.divider()
 st.subheader("Add-ons (from Google Sheet)")
 
 def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, price_default: float):
-    """
-    One line UI:
-      [checkbox] + [qty] + [price]
-    Price default comes from sheet only.
-    """
     checked = st.checkbox(label, key=f"addon_{addon_key}")
     if not checked:
         return 0.0
 
-    # step size by unit
     unit_norm = (unit or "").strip().lower().replace(" ", "")
     if unit_norm in ("m2", "m²"):
         step_qty = 0.1
@@ -915,9 +909,7 @@ def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, pri
     return total
 
 
-# -------------------------
-# A) Removal & Disposal (still from REMOVAL_TYPES)
-# -------------------------
+# 1) Removal & Disposal (still from REMOVAL_TYPES)
 st.markdown("### Removal & Disposal")
 for r in REMOVAL_TYPES:
     subtotal += add_addon_row(
@@ -929,30 +921,46 @@ for r in REMOVAL_TYPES:
     )
 
 
-# -------------------------
-# B) Add-ons from Google Sheet (grouped)
-#     - step group is renamed to "Stairs" and placed right below Removal
-# -------------------------
+# 2) Sheet-driven add-ons
 if addons_df is None or addons_df.empty:
     st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
 else:
-    # validate required columns
-    required_cols = {"id", "group", "label", "unit", "price"}
-    missing = required_cols - set([c.strip().lower() for c in addons_df.columns])
-    if missing:
-        st.error(f"Add-ons sheet is missing required columns: {', '.join(sorted(missing))}")
-    else:
-        # normalize column access (handles accidental capitalization in sheet headers)
-        cols = {c.strip().lower(): c for c in addons_df.columns}
+    # normalize column names (handles capitalization/spaces)
+    def norm_col(c: str) -> str:
+        return str(c or "").strip().lower().replace(" ", "").replace("_", "")
 
-        # build grouped dict
+    colmap = {norm_col(c): c for c in addons_df.columns}
+
+    # Accept any of these as the category/group column:
+    group_col = (
+        colmap.get("group") or
+        colmap.get("category") or
+        colmap.get("type")
+    )
+
+    id_col = colmap.get("id")
+    label_col = colmap.get("label") or colmap.get("name")
+    unit_col = colmap.get("unit")
+    price_col = colmap.get("price") or colmap.get("rate")
+
+    missing = []
+    if not group_col: missing.append("group/category/type")
+    if not id_col: missing.append("id")
+    if not label_col: missing.append("label/name")
+    if not unit_col: missing.append("unit")
+    if not price_col: missing.append("price/rate")
+
+    if missing:
+        st.error("Add-ons sheet is missing required columns: " + ", ".join(missing))
+    else:
         groups: Dict[str, List[dict]] = {}
+
         for _, row in addons_df.iterrows():
-            addon_id = str(row.get(cols["id"], "")).strip()
-            grp = str(row.get(cols["group"], "")).strip().lower()
-            label = str(row.get(cols["label"], "")).strip()
-            unit = str(row.get(cols["unit"], "")).strip()
-            price = safe_float(row.get(cols["price"], 0.0), 0.0)
+            addon_id = str(row.get(id_col, "")).strip()
+            grp = str(row.get(group_col, "")).strip().lower()
+            label = str(row.get(label_col, "")).strip()
+            unit = str(row.get(unit_col, "")).strip()
+            price = safe_float(row.get(price_col, 0.0), 0.0)
 
             if not addon_id or not label:
                 continue
@@ -961,17 +969,15 @@ else:
                 {"id": addon_id, "group": grp, "label": label, "unit": unit, "price": price}
             )
 
-        # order: stairs first, then the rest (alphabetical) excluding step
-        group_order = []
+        # Order: Stairs (step) first, then others
+        ordered = []
         if "step" in groups:
-            group_order.append("step")
-        for g in sorted([k for k in groups.keys() if k != "step"]):
-            group_order.append(g)
+            ordered.append("step")
+        ordered.extend(sorted([g for g in groups.keys() if g != "step"]))
 
-        # render groups
-        for grp in group_order:
-            display_title = "Stairs" if grp == "step" else grp.title()
-            st.markdown(f"### {display_title}")
+        for grp in ordered:
+            title = "Stairs" if grp == "step" else grp.title()
+            st.markdown(f"### {title}")
 
             for item in groups.get(grp, []):
                 unit_norm = (item["unit"] or "").strip().lower().replace(" ", "")
@@ -989,7 +995,7 @@ else:
                     qty_default=qty_default,
                     price_default=float(item["price"]),
                 )
-
+                
 # =========================
 # TOTALS
 # =========================
