@@ -861,6 +861,7 @@ else:
 # =========================
 # ADD-ONS UI: normal rows (checkbox + qty + price one line)
 # =========================
+
 st.divider()
 st.subheader("Add-ons")
 
@@ -896,8 +897,12 @@ def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, pri
     line_items.append(line_item(label, f"{qty:.2f} {unit}", float(unit_price), total))
     return total
 
-# Removal rows
-st.markdown("##### Removal & Disposal")
+
+# ----------------------------------------------------
+# 1️⃣ Removal & Disposal
+# ----------------------------------------------------
+st.markdown("### Removal & Disposal")
+
 for r in REMOVAL_TYPES:
     subtotal += add_addon_row(
         addon_key=f"removal_{r['id']}",
@@ -908,15 +913,74 @@ for r in REMOVAL_TYPES:
         step_qty=0.1,
     )
 
-# Skirting row (height selector + normal row)
-st.markdown("##### Skirting")
+
+# ----------------------------------------------------
+# 2️⃣ STAIRS GROUP (NEW)
+# ----------------------------------------------------
+st.markdown("### Stairs")
+
+with st.container():
+    st.caption("Grouped stair pricing")
+
+    subtotal += add_addon_row(
+        addon_key="stair_steps",
+        label="Stair treads (normal steps)",
+        unit="step",
+        qty_default=0.0,
+        price_default=120.0,
+        step_qty=1.0,
+    )
+
+    subtotal += add_addon_row(
+        addon_key="stair_side_left",
+        label="Stair side stringer (left)",
+        unit="side",
+        qty_default=1.0,
+        price_default=250.0,
+        step_qty=1.0,
+    )
+
+    subtotal += add_addon_row(
+        addon_key="stair_side_right",
+        label="Stair side stringer (right)",
+        unit="side",
+        qty_default=1.0,
+        price_default=250.0,
+        step_qty=1.0,
+    )
+
+
+# ----------------------------------------------------
+# 3️⃣ Furniture
+# ----------------------------------------------------
+st.markdown("### Furniture Handling")
+
+subtotal += add_addon_row(
+    addon_key="furniture",
+    label="Furniture handling",
+    unit="room",
+    qty_default=float(len(st.session_state["rooms"])),
+    price_default=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
+    step_qty=1.0,
+)
+
+
+# ----------------------------------------------------
+# 4️⃣ Other Add-ons (INCLUDING SKIRTING NOW)
+# ----------------------------------------------------
+st.markdown("### Other Add-ons")
+
+# --- Skirting moved here ---
+st.session_state.setdefault("skirting_id", SKIRTING[0]["id"])
 st.selectbox(
     "Skirting height",
     options=[s["id"] for s in SKIRTING],
     format_func=lambda sid: f"{find_by_id(SKIRTING, sid)['height_mm']}mm",
     key="skirting_id",
 )
+
 sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
+
 subtotal += add_addon_row(
     addon_key=f"skirting_{sk['id']}",
     label=f"Skirting — {sk['height_mm']}mm",
@@ -926,8 +990,7 @@ subtotal += add_addon_row(
     step_qty=1.0,
 )
 
-# Sheet add-ons
-st.markdown("##### Other Add-ons (from sheet)")
+# --- Sheet based add-ons ---
 if addons_df is not None and not addons_df.empty:
     for _, row in addons_df.iterrows():
         addon_id = str(row.get("id", "")).strip()
@@ -947,10 +1010,6 @@ if addons_df is not None and not addons_df.empty:
             qty_default = float(len(st.session_state["rooms"]))
             unit_display = "room"
             step_qty = 1.0
-        elif unit_norm in ("lm", "linm", "linearm"):
-            qty_default = 0.0
-            unit_display = "lm"
-            step_qty = 1.0
         else:
             qty_default = 1.0
             unit_display = unit_raw
@@ -964,9 +1023,6 @@ if addons_df is not None and not addons_df.empty:
             price_default=float(default_price),
             step_qty=step_qty,
         )
-else:
-    st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
-
 
 # =========================
 # TOTALS
