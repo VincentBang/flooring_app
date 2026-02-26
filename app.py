@@ -1073,7 +1073,7 @@ payload = {
     "terms": terms,
 }
 
-"""with st.expander("DEBUG — client fields in payload (must NOT be blank)", expanded=False):
+with st.expander("DEBUG — client fields in payload (must NOT be blank)", expanded=False):
     st.write(
         {
             "client_name": payload["client_name"],
@@ -1081,7 +1081,7 @@ payload = {
             "client_email": payload["client_email"],
             "site_address": payload["site_address"],
         }
-    )"""
+    )
 
 st.session_state.setdefault("quote_saved", False)
 
