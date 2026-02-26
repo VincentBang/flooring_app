@@ -908,17 +908,6 @@ for r in REMOVAL_TYPES:
         step_qty=0.1,
     )
 
-# Furniture row
-st.markdown("##### Furniture Handling")
-subtotal += add_addon_row(
-    addon_key="furniture",
-    label="Furniture handling",
-    unit="room",
-    qty_default=float(len(st.session_state["rooms"])),
-    price_default=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
-    step_qty=1.0,
-)
-
 # Skirting row (height selector + normal row)
 st.markdown("##### Skirting")
 st.selectbox(
