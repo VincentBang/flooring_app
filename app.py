@@ -863,15 +863,32 @@ else:
 # =========================
 
 st.divider()
-st.subheader("Add-ons")
+st.subheader("Add-ons (from Google Sheet)")
 
-def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, price_default: float, step_qty: float):
+def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, price_default: float):
+    """
+    One line UI:
+      [checkbox] + [qty] + [price]
+    Price default comes from sheet only.
+    """
     checked = st.checkbox(label, key=f"addon_{addon_key}")
     if not checked:
         return 0.0
 
-    c1, c2 = st.columns([1.1, 1.0], gap="small")
-    with c1:
+    # step size by unit
+    unit_norm = (unit or "").strip().lower().replace(" ", "")
+    if unit_norm in ("m2", "m²"):
+        step_qty = 0.1
+        unit_display = "m²"
+    elif unit_norm in ("room", "rooms"):
+        step_qty = 1.0
+        unit_display = "room"
+    else:
+        step_qty = 1.0
+        unit_display = unit if unit else "each"
+
+    c_qty, c_price = st.columns([1.1, 1.0], gap="small")
+    with c_qty:
         qty = st.number_input(
             "Qty",
             min_value=0.0,
@@ -880,9 +897,9 @@ def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, pri
             key=f"addon_qty_{addon_key}",
             label_visibility="collapsed",
         )
-        st.caption(unit)
+        st.caption(unit_display)
 
-    with c2:
+    with c_price:
         unit_price = st.number_input(
             "Price",
             min_value=0.0,
@@ -891,18 +908,17 @@ def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, pri
             key=f"addon_price_{addon_key}",
             label_visibility="collapsed",
         )
-        st.caption(f"per {unit}")
+        st.caption(f"per {unit_display}")
 
     total = float(qty) * float(unit_price)
-    line_items.append(line_item(label, f"{qty:.2f} {unit}", float(unit_price), total))
+    line_items.append(line_item(label, f"{qty:.2f} {unit_display}", float(unit_price), total))
     return total
 
 
-# ----------------------------------------------------
-# 1️⃣ Removal & Disposal
-# ----------------------------------------------------
+# -------------------------
+# A) Removal & Disposal (still from REMOVAL_TYPES)
+# -------------------------
 st.markdown("### Removal & Disposal")
-
 for r in REMOVAL_TYPES:
     subtotal += add_addon_row(
         addon_key=f"removal_{r['id']}",
@@ -910,136 +926,69 @@ for r in REMOVAL_TYPES:
         unit="m²",
         qty_default=float(total_area),
         price_default=float(r.get("remove_per_m2", 0.0)),
-        step_qty=0.1,
     )
 
 
-# ----------------------------------------------------
-# 2️⃣ STAIRS GROUP (NEW)
-# ----------------------------------------------------
-st.markdown("### Stairs")
+# -------------------------
+# B) Add-ons from Google Sheet (grouped)
+#     - step group is renamed to "Stairs" and placed right below Removal
+# -------------------------
+if addons_df is None or addons_df.empty:
+    st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
+else:
+    # validate required columns
+    required_cols = {"id", "group", "label", "unit", "price"}
+    missing = required_cols - set([c.strip().lower() for c in addons_df.columns])
+    if missing:
+        st.error(f"Add-ons sheet is missing required columns: {', '.join(sorted(missing))}")
+    else:
+        # normalize column access (handles accidental capitalization in sheet headers)
+        cols = {c.strip().lower(): c for c in addons_df.columns}
 
-with st.container():
-    st.caption("Grouped stair pricing")
+        # build grouped dict
+        groups: Dict[str, List[dict]] = {}
+        for _, row in addons_df.iterrows():
+            addon_id = str(row.get(cols["id"], "")).strip()
+            grp = str(row.get(cols["group"], "")).strip().lower()
+            label = str(row.get(cols["label"], "")).strip()
+            unit = str(row.get(cols["unit"], "")).strip()
+            price = safe_float(row.get(cols["price"], 0.0), 0.0)
 
-    subtotal += add_addon_row(
-        addon_key="stair_steps",
-        label="Normal step",
-        unit="step",
-        qty_default=0.0,
-        price_default=120.0,
-        step_qty=1.0,
-    )
+            if not addon_id or not label:
+                continue
 
-    subtotal += add_addon_row(
-        addon_key="stair_triangle",
-        label="Triangle step",
-        unit="si",
-        qty_default=1.0,
-        price_default=250.0,
-        step_qty=1.0,
-    )
+            groups.setdefault(grp, []).append(
+                {"id": addon_id, "group": grp, "label": label, "unit": unit, "price": price}
+            )
 
-    subtotal += add_addon_row(
-        addon_key="stair_landing",
-        label="Landing step",
-        unit="side",
-        qty_default=1.0,
-        price_default=250.0,
-        step_qty=1.0,
-    )
+        # order: stairs first, then the rest (alphabetical) excluding step
+        group_order = []
+        if "step" in groups:
+            group_order.append("step")
+        for g in sorted([k for k in groups.keys() if k != "step"]):
+            group_order.append(g)
 
-    subtotal += add_addon_row(
-        addon_key="stair_side_1",
-        label="Open step 1 side",
-        unit="side",
-        qty_default=1.0,
-        price_default=250.0,
-        step_qty=1.0,
-    )
+        # render groups
+        for grp in group_order:
+            display_title = "Stairs" if grp == "step" else grp.title()
+            st.markdown(f"### {display_title}")
 
-    subtotal += add_addon_row(
-        addon_key="stair_side_2",
-        label="Open step 2 sides",
-        unit="side",
-        qty_default=1.0,
-        price_default=250.0,
-        step_qty=1.0,
-    )
+            for item in groups.get(grp, []):
+                unit_norm = (item["unit"] or "").strip().lower().replace(" ", "")
+                if unit_norm in ("m2", "m²"):
+                    qty_default = float(chargeable_area)
+                elif unit_norm in ("room", "rooms"):
+                    qty_default = float(len(st.session_state["rooms"]))
+                else:
+                    qty_default = 1.0
 
-# ----------------------------------------------------
-# 3️⃣ Furniture
-# ----------------------------------------------------
-st.markdown("### Furniture Handling")
-
-subtotal += add_addon_row(
-    addon_key="furniture",
-    label="Furniture handling",
-    unit="room",
-    qty_default=float(len(st.session_state["rooms"])),
-    price_default=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
-    step_qty=1.0,
-)
-
-
-# ----------------------------------------------------
-# 4️⃣ Other Add-ons (INCLUDING SKIRTING NOW)
-# ----------------------------------------------------
-st.markdown("### Other Add-ons")
-
-# --- Skirting moved here ---
-st.session_state.setdefault("skirting_id", SKIRTING[0]["id"])
-st.selectbox(
-    "Skirting height",
-    options=[s["id"] for s in SKIRTING],
-    format_func=lambda sid: f"{find_by_id(SKIRTING, sid)['height_mm']}mm",
-    key="skirting_id",
-)
-
-sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
-
-subtotal += add_addon_row(
-    addon_key=f"skirting_{sk['id']}",
-    label=f"Skirting — {sk['height_mm']}mm",
-    unit="lm",
-    qty_default=float(st.session_state.get("skirting_lm", 0.0)),
-    price_default=float(sk.get("price_per_lm", 0.0)),
-    step_qty=1.0,
-)
-
-# --- Sheet based add-ons ---
-if addons_df is not None and not addons_df.empty:
-    for _, row in addons_df.iterrows():
-        addon_id = str(row.get("id", "")).strip()
-        label = str(row.get("label", "")).strip()
-        unit_raw = str(row.get("unit", "")).strip() or "each"
-        default_price = safe_float(row.get("price", 0.0), 0.0)
-
-        if not addon_id or not label:
-            continue
-
-        unit_norm = unit_raw.lower().replace(" ", "")
-        if unit_norm in ("m2", "m²"):
-            qty_default = float(chargeable_area)
-            unit_display = "m²"
-            step_qty = 0.1
-        elif unit_norm in ("room", "rooms"):
-            qty_default = float(len(st.session_state["rooms"]))
-            unit_display = "room"
-            step_qty = 1.0
-        else:
-            qty_default = 1.0
-            unit_display = unit_raw
-            step_qty = 1.0
-
-        subtotal += add_addon_row(
-            addon_key=f"sheet_{addon_id}",
-            label=label,
-            unit=unit_display,
-            qty_default=qty_default,
-            price_default=float(default_price),
-            step_qty=step_qty,
-        )
+                subtotal += add_addon_row(
+                    addon_key=f"sheet_{item['id']}",
+                    label=item["label"],
+                    unit=item["unit"],
+                    qty_default=qty_default,
+                    price_default=float(item["price"]),
+                )
 
 # =========================
 # TOTALS
