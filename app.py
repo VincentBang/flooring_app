@@ -157,11 +157,13 @@ def parse_dims(text: str):
     except Exception:
         return None, None
 
+
 def norm_phone(s: str) -> str:
     return re.sub(r"\D+", "", (s or "").strip())
 
+
 # =========================
-# STATE: PERSISTENT KEYS + WIDGET KEYS SEPARATION
+# STATE
 # =========================
 PERSIST_CLIENT_KEYS = ["client_name", "client_phone", "client_email", "site_address"]
 
@@ -169,28 +171,27 @@ def ensure_state():
     ss = st.session_state
     ss.setdefault("step", 1)
 
-    # Persistent (non-widget) quote fields
+    # Client
     ss.setdefault("client_name", "")
     ss.setdefault("client_phone", "")
     ss.setdefault("client_email", "")
     ss.setdefault("site_address", "")
 
+    # Quote meta
     ss.setdefault("job_mode", "Supply & Install")
     ss.setdefault("quote_type", "Retail")
-
     ss.setdefault("wastage_pct", float(DEFAULT_WASTAGE_PCT))
-    ss.setdefault("scope_removal", False)
-    ss.setdefault("scope_furniture", False)
-    ss.setdefault("scope_skirting", False)
 
-    ss.setdefault("removal_selected", [])
-    ss.setdefault("furniture_rate", float(DEFAULT_FURNITURE_PER_ROOM))
-    ss.setdefault("skirting_id", SKIRTING[0]["id"])
+    # Selection (moved to Step 2 after measurements)
+    ss.setdefault("product_id", "")
+    ss.setdefault("install_id", "")
 
+    # Measurements
     ss.setdefault("rooms", [{"length": 0.0, "width": 0.0}])
     if not isinstance(ss["rooms"], list) or not ss["rooms"]:
         ss["rooms"] = [{"length": 0.0, "width": 0.0}]
 
+    # Save flags
     ss.setdefault("quote_saved", False)
     ss.setdefault("last_quote_id", "")
 
@@ -200,22 +201,18 @@ ensure_state()
 def clear_dynamic_keys():
     ss = st.session_state
     for k in list(ss.keys()):
+        # NOTE: scope keys removed; now addons drive everything
         if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "removal_rate_")):
             del ss[k]
 
 
 def reset_quote():
     ss = st.session_state
-    # Remove only quote-related stuff, keep search inputs if you want
     keys_to_remove = [
         "step",
         "client_name", "client_phone", "client_email", "site_address",
         "job_mode", "quote_type",
         "wastage_pct",
-        "scope_removal", "scope_furniture", "scope_skirting",
-        "removal_selected",
-        "furniture_rate",
-        "skirting_id",
         "rooms",
         "product_id", "install_id",
         "skirting_lm",
@@ -228,22 +225,21 @@ def reset_quote():
     for k in keys_to_remove:
         if k in ss:
             del ss[k]
-    # Remove Step1 widget keys too (input-only keys)
+
+    # Remove Step1 widget keys too
     for k in ["client_name_input", "client_phone_input", "client_email_input", "site_address_input"]:
         if k in ss:
             del ss[k]
+
     clear_dynamic_keys()
     ensure_state()
 
 
 def sync_persistent_from_widget(persist_key: str, widget_key: str):
-    # Called on widget change: copy into persistent key
     st.session_state[persist_key] = (st.session_state.get(widget_key, "") or "").strip()
 
 
 def bind_client_input(label: str, persist_key: str, widget_key: str):
-    # IMPORTANT: widget uses *widget_key* (so it can be pruned safely)
-    # persistent value stored in *persist_key* (never pruned)
     st.text_input(
         label,
         value=st.session_state.get(persist_key, ""),
@@ -321,7 +317,6 @@ def search_quotes(phone=None, address=None):
 def load_snapshot_into_state(snapshot: Dict[str, Any]):
     ss = st.session_state
 
-    # Restore persistent fields
     ss["client_name"] = str(snapshot.get("client_name", "") or "")
     ss["client_phone"] = str(snapshot.get("client_phone", "") or "")
     ss["client_email"] = str(snapshot.get("client_email", "") or "")
@@ -330,7 +325,6 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
     ss["job_mode"] = str(snapshot.get("job_mode", "") or ss.get("job_mode", "Supply & Install"))
     ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
 
-    # Rooms
     rooms = snapshot.get("rooms", [])
     restored_rooms = []
     if isinstance(rooms, list) and rooms:
@@ -341,11 +335,9 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
                 continue
     ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
 
-    # Reset save flag so you can resave
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
 
-    # Remove widget keys so Step1 reflects restored persistent values
     for k in ["client_name_input", "client_phone_input", "client_email_input", "site_address_input"]:
         if k in ss:
             del ss[k]
@@ -358,7 +350,7 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
 # MOBILE TEXT OUTPUT
 # =========================
 def build_mobile_quote_text(payload: dict) -> str:
-    def money0(x: float) -> str:
+    def money0_local(x: float) -> str:
         return f"${float(x):,.0f}"
 
     def qty_pretty(qty_str: str) -> tuple[str, str]:
@@ -391,11 +383,11 @@ def build_mobile_quote_text(payload: dict) -> str:
         qty_display = f"{qty_num} {qty_unit}".strip()
 
         lines.append(label)
-        lines.append(f"{qty_display} x {money0(unit_price)} = {money0(total)}")
+        lines.append(f"{qty_display} x {money0_local(unit_price)} = {money0_local(total)}")
         lines.append("")
 
     subtotal_ex_gst = float(payload.get("subtotal_ex_gst", 0.0))
-    lines.append(f"Total: {money0(subtotal_ex_gst)}")
+    lines.append(f"Total: {money0_local(subtotal_ex_gst)}")
     return "\n".join(lines).strip()
 
 
@@ -657,9 +649,6 @@ if st.button("🧼 New Quote (reset)", use_container_width=True):
 st.divider()
 st.subheader("Retrieve Existing Quote")
 
-def norm_phone(s: str) -> str:
-    return re.sub(r"\D+", "", (s or "").strip())
-
 with st.form("quote_search_form", clear_on_submit=False):
     search_phone = st.text_input("Search by phone", key="search_phone")
     search_address = st.text_input("Search by address", key="search_address")
@@ -669,7 +658,6 @@ if submitted:
     phone_norm = norm_phone(search_phone)
     addr = (search_address or "").strip()
 
-    # phone OR address (either, not both)
     if phone_norm:
         results = search_quotes(phone=phone_norm, address=None)
     elif addr:
@@ -693,7 +681,7 @@ if submitted:
 
 
 # =========================
-# STEP 1 — JOB SETUP
+# STEP 1 — JOB SETUP (scope removed from here)
 # =========================
 if st.session_state.get("step", 1) == 1:
     st.subheader("Step 1 — Job Setup")
@@ -715,80 +703,8 @@ if st.session_state.get("step", 1) == 1:
 
     st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
 
-    st.divider()
-    st.subheader("Step 2 — Select Scope")
-    st.checkbox("Include floor removal & disposal", key="scope_removal")
-    st.checkbox("Include furniture handling", key="scope_furniture")
-    st.checkbox("Include skirting", key="scope_skirting")
-
-    st.divider()
-
-    if st.session_state.get("job_mode") == "Supply & Install":
-        if not products_df.empty and "id" in products_df.columns:
-            product_options = products_df["id"].astype(str).tolist()
-            st.session_state["product_id"] = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
-
-            st.selectbox(
-                "Select timber product (Supply & Install)",
-                options=product_options,
-                index=product_options.index(str(st.session_state["product_id"])),
-                format_func=lambda pid: (
-                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
-                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
-                ),
-                key="product_id",
-            )
-        else:
-            st.selectbox(
-                "Select timber product (Supply & Install)",
-                options=[p["id"] for p in PRODUCTS],
-                format_func=lambda pid: f"{find_by_id(PRODUCTS, pid)['brand']} — {find_by_id(PRODUCTS, pid)['name']}",
-                key="product_id",
-            )
-    else:
-        st.selectbox(
-            "Select installation type (Installation Only)",
-            options=[i["id"] for i in INSTALL_ONLY],
-            format_func=lambda iid: find_by_id(INSTALL_ONLY, iid)["name"],
-            key="install_id",
-        )
-
-    st.number_input(
-        "Wastage (%)",
-        min_value=0.0,
-        max_value=25.0,
-        value=float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT)),
-        step=0.5,
-        key="wastage_pct",
-    )
-
-    if st.session_state.get("scope_removal"):
-        st.multiselect(
-            "Existing floor type(s) to remove",
-            options=[r["id"] for r in REMOVAL_TYPES],
-            format_func=lambda rid: find_by_id(REMOVAL_TYPES, rid)["name"],
-            key="removal_selected",
-        )
-
-    if st.session_state.get("scope_furniture"):
-        st.number_input(
-            "Furniture handling rate ($ per room)",
-            min_value=0.0,
-            value=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
-            step=5.0,
-            key="furniture_rate",
-        )
-
-    if st.session_state.get("scope_skirting"):
-        st.selectbox(
-            "Skirting height",
-            options=[s["id"] for s in SKIRTING],
-            format_func=lambda sid: f"{find_by_id(SKIRTING, sid)['height_mm']}mm",
-            key="skirting_id",
-        )
-
-    if st.button("Next → Measurements & Quote", use_container_width=True):
-        # ALSO sync once on Next (covers if user typed but didn't blur input)
+    if st.button("Next → Measurements", use_container_width=True):
+        # sync once on Next
         sync_persistent_from_widget("client_name", "client_name_input")
         sync_persistent_from_widget("client_phone", "client_phone_input")
         sync_persistent_from_widget("client_email", "client_email_input")
@@ -799,7 +715,7 @@ if st.session_state.get("step", 1) == 1:
 
 
 # =========================
-# STEP 2 — MEASUREMENTS + QUOTE + OUTPUT
+# STEP 2 — MEASUREMENTS → TOTALS → THEN SELECT TIMBER → THEN ADDONS
 # =========================
 if st.session_state.get("step", 1) == 2:
     ensure_state()
@@ -866,24 +782,69 @@ if st.session_state.get("step", 1) == 2:
     st.button("➕ Add Room", on_click=add_room)
 
     total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state["rooms"])
-    wastage_pct = float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT))
-    chargeable_area = total_area * (1.0 + wastage_pct / 100.0)
+
+    # Wastage stays here (after measurements, before product pricing)
+    wastage_pct = st.number_input(
+        "Wastage (%)",
+        min_value=0.0,
+        max_value=25.0,
+        value=float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT)),
+        step=0.5,
+        key="wastage_pct",
+    )
+    chargeable_area = total_area * (1.0 + float(wastage_pct) / 100.0)
 
     st.markdown("---")
     a, b, ccol = st.columns(3)
     a.metric("Total area (m²)", f"{total_area:.2f}")
-    b.metric("Wastage (%)", f"{wastage_pct:.1f}")
+    b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
     ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
+    # ---------------------------------------------------------
+    # NOW: select timber / install AFTER measurements + totals
+    # ---------------------------------------------------------
     st.divider()
-    st.subheader("Step 4 — Quote Items (selected scope only)")
+    st.subheader("Select Timber / Installation (after measurements)")
+
+    if st.session_state.get("job_mode") == "Supply & Install":
+        if not products_df.empty and "id" in products_df.columns:
+            product_options = products_df["id"].astype(str).tolist()
+            st.session_state["product_id"] = safe_pick_id(products_df, st.session_state.get("product_id", ""), "id")
+
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=product_options,
+                index=product_options.index(str(st.session_state["product_id"])),
+                format_func=lambda pid: (
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'brand'].values[0]} — "
+                    f"{products_df.loc[products_df['id'].astype(str)==str(pid),'name'].values[0]}"
+                ),
+                key="product_id",
+            )
+        else:
+            st.selectbox(
+                "Select timber product (Supply & Install)",
+                options=[p["id"] for p in PRODUCTS],
+                format_func=lambda pid: f"{find_by_id(PRODUCTS, pid)['brand']} — {find_by_id(PRODUCTS, pid)['name']}",
+                key="product_id",
+            )
+    else:
+        st.selectbox(
+            "Select installation type (Installation Only)",
+            options=[i["id"] for i in INSTALL_ONLY],
+            format_func=lambda iid: find_by_id(INSTALL_ONLY, iid)["name"],
+            key="install_id",
+        )
+
+    st.divider()
+    st.subheader("Quote Items (Core + Add-ons)")
 
     line_items: List[dict] = []
     subtotal = 0.0
 
     # CORE MODE
     if st.session_state.get("job_mode") == "Supply & Install":
-        st.markdown("#### Supply & Install")
+        st.markdown("#### Core: Supply & Install")
 
         unit_price_default = 0.0
         product_label = "Supply & install"
@@ -919,7 +880,7 @@ if st.session_state.get("step", 1) == 2:
         subtotal += total
 
     else:
-        st.markdown("#### Installation Only")
+        st.markdown("#### Core: Installation Only")
         ins = find_by_id(INSTALL_ONLY, st.session_state.get("install_id", INSTALL_ONLY[0]["id"]))
 
         unit_price = st.number_input(
@@ -934,112 +895,136 @@ if st.session_state.get("step", 1) == 2:
         line_items.append(line_item(ins["name"], f"{total_area:.2f} m²", unit_price, total))
         subtotal += total
 
-    # REMOVAL
-    if st.session_state.get("scope_removal"):
-        st.markdown("#### Floor Removal & Disposal")
-        for rid in st.session_state.get("removal_selected", []):
-            r = find_by_id(REMOVAL_TYPES, rid)
+    # ---------------------------------------------------------
+    # ADD-ONS (this now includes removal/furniture/skirting too)
+    # ---------------------------------------------------------
+    st.markdown("#### Add-ons")
 
-            unit_price = st.number_input(
-                f"{r['name']} removal ($/m²)",
-                min_value=0.0,
-                value=float(r["remove_per_m2"]),
-                step=1.0,
-                key=f"removal_rate_{rid}",
+    # A) Removal & disposal (moved here)
+    with st.expander("Floor removal & disposal", expanded=False):
+        if st.checkbox("Include removal & disposal", key="addon_scope_removal"):
+            removal_ids = [r["id"] for r in REMOVAL_TYPES]
+            selected = st.multiselect(
+                "Existing floor type(s) to remove",
+                options=removal_ids,
+                default=[],
+                format_func=lambda rid: find_by_id(REMOVAL_TYPES, rid)["name"],
+                key="addon_removal_selected",
             )
 
-            total = total_area * unit_price
-            line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", unit_price, total))
+            for rid in selected:
+                r = find_by_id(REMOVAL_TYPES, rid)
+                unit_price = st.number_input(
+                    f"{r['name']} removal ($/m²)",
+                    min_value=0.0,
+                    value=float(r["remove_per_m2"]),
+                    step=1.0,
+                    key=f"removal_rate_{rid}",
+                )
+                total = total_area * unit_price
+                line_items.append(line_item(f"Removal & disposal — {r['name']}", f"{total_area:.2f} m²", unit_price, total))
+                subtotal += total
+
+    # B) Furniture handling (moved here)
+    with st.expander("Furniture handling", expanded=False):
+        if st.checkbox("Include furniture handling", key="addon_scope_furniture"):
+            room_names = [f"Room {i+1}" for i in range(len(st.session_state["rooms"]))]
+            selected_rooms = st.multiselect(
+                "Select rooms requiring furniture handling",
+                options=room_names,
+                default=room_names,
+                key="furniture_rooms_selected",
+            )
+            rooms_count = len(selected_rooms)
+
+            unit_price = st.number_input(
+                "Furniture handling rate ($ per room)",
+                min_value=0.0,
+                value=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
+                step=5.0,
+                key="furniture_rate_override",
+            )
+
+            total = rooms_count * unit_price
+            line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", unit_price, total))
             subtotal += total
 
-    # FURNITURE
-    if st.session_state.get("scope_furniture"):
-        st.markdown("#### Furniture Handling")
-        room_names = [f"Room {i+1}" for i in range(len(st.session_state["rooms"]))]
-        selected_rooms = st.multiselect(
-            "Select rooms requiring furniture handling",
-            options=room_names,
-            default=room_names,
-            key="furniture_rooms_selected",
-        )
-        rooms_count = len(selected_rooms)
+    # C) Skirting (moved here)
+    with st.expander("Skirting", expanded=False):
+        if st.checkbox("Include skirting", key="addon_scope_skirting"):
+            st.session_state.setdefault("skirting_id", SKIRTING[0]["id"])
+            st.selectbox(
+                "Skirting height",
+                options=[s["id"] for s in SKIRTING],
+                format_func=lambda sid: f"{find_by_id(SKIRTING, sid)['height_mm']}mm",
+                key="skirting_id",
+            )
+            sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
 
-        unit_price = st.number_input(
-            "Furniture handling rate ($ per room)",
-            min_value=0.0,
-            value=float(st.session_state.get("furniture_rate", DEFAULT_FURNITURE_PER_ROOM)),
-            step=5.0,
-            key="furniture_rate_override",
-        )
+            unit_price = st.number_input(
+                "Skirting price ($/lm)",
+                min_value=0.0,
+                value=float(sk["price_per_lm"]),
+                step=1.0,
+                key="skirting_price_override",
+            )
 
-        total = rooms_count * unit_price
-        line_items.append(line_item("Furniture handling", f"{rooms_count} room(s)", unit_price, total))
-        subtotal += total
+            lm = st.number_input(
+                "Total skirting length (lm)",
+                min_value=0.0,
+                value=float(st.session_state.get("skirting_lm", 0.0)),
+                step=1.0,
+                key="skirting_lm",
+            )
 
-    # SKIRTING
-    if st.session_state.get("scope_skirting"):
-        st.markdown("#### Skirting")
-        sk = find_by_id(SKIRTING, st.session_state.get("skirting_id", SKIRTING[0]["id"]))
+            total = lm * unit_price
+            line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", unit_price, total))
+            subtotal += total
 
-        unit_price = st.number_input(
-            "Skirting price ($/lm)",
-            min_value=0.0,
-            value=float(sk["price_per_lm"]),
-            step=1.0,
-            key="skirting_price_override",
-        )
+    # D) Sheet add-ons (unchanged, still here)
+    with st.expander("Other add-ons (from sheet tab 'addons')", expanded=True):
+        if addons_df is not None and not addons_df.empty:
+            for _, row in addons_df.iterrows():
+                addon_id = str(row.get("id", "")).strip()
+                label = str(row.get("label", "")).strip()
+                unit = str(row.get("unit", "")).strip()
+                default_price = safe_float(row.get("price", 0.0), 0.0)
 
-        lm = st.number_input("Total skirting length (lm)", min_value=0.0, value=float(st.session_state.get("skirting_lm", 0.0)), step=1.0, key="skirting_lm")
+                if not addon_id or not label:
+                    continue
 
-        total = lm * unit_price
-        line_items.append(line_item(f"Skirting — {sk['height_mm']}mm", f"{lm:.1f} lm", unit_price, total))
-        subtotal += total
+                if st.checkbox(label, key=f"addon_{addon_id}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if unit == "m2":
+                            qty_default = chargeable_area
+                        elif unit == "room":
+                            qty_default = len(st.session_state["rooms"])
+                        else:
+                            qty_default = 1.0
 
-    # ADDONS
-    st.markdown("#### Additional Items")
-    if addons_df is not None and not addons_df.empty:
-        for _, row in addons_df.iterrows():
-            addon_id = str(row.get("id", "")).strip()
-            label = str(row.get("label", "")).strip()
-            unit = str(row.get("unit", "")).strip()
-            default_price = safe_float(row.get("price", 0.0), 0.0)
+                        qty = st.number_input(
+                            f"Quantity ({unit})",
+                            min_value=0.0,
+                            value=float(st.session_state.get(f"addon_qty_{addon_id}", qty_default)),
+                            step=1.0 if unit in ("room", "each") else 0.1,
+                            key=f"addon_qty_{addon_id}",
+                        )
 
-            if not addon_id or not label:
-                continue
+                    with col2:
+                        unit_price = st.number_input(
+                            f"Price per {unit}",
+                            min_value=0.0,
+                            value=float(st.session_state.get(f"addon_price_{addon_id}", default_price)),
+                            step=1.0,
+                            key=f"addon_price_{addon_id}",
+                        )
 
-            if st.checkbox(label, key=f"addon_{addon_id}"):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    if unit == "m2":
-                        qty_default = chargeable_area
-                    elif unit == "room":
-                        qty_default = len(st.session_state["rooms"])
-                    else:
-                        qty_default = 1.0
-
-                    qty = st.number_input(
-                        f"Quantity ({unit})",
-                        min_value=0.0,
-                        value=float(st.session_state.get(f"addon_qty_{addon_id}", qty_default)),
-                        step=1.0 if unit in ("room", "each") else 0.1,
-                        key=f"addon_qty_{addon_id}",
-                    )
-
-                with col2:
-                    unit_price = st.number_input(
-                        f"Price per {unit}",
-                        min_value=0.0,
-                        value=float(st.session_state.get(f"addon_price_{addon_id}", default_price)),
-                        step=1.0,
-                        key=f"addon_price_{addon_id}",
-                    )
-
-                total = qty * unit_price
-                line_items.append(line_item(label, f"{qty:.2f} {unit}", unit_price, total))
-                subtotal += total
-    else:
-        st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
+                    total = qty * unit_price
+                    line_items.append(line_item(label, f"{qty:.2f} {unit}", unit_price, total))
+                    subtotal += total
+        else:
+            st.caption("No add-ons found in sheet tab 'addons' (or tab is empty).")
 
     # TOTALS
     st.divider()
@@ -1050,9 +1035,9 @@ if st.session_state.get("step", 1) == 2:
     t2.metric("GST", money0(gst))
     t3.metric("Total (inc GST)", money0(total_inc))
 
-    # STEP 5
+    # SAVE / OUTPUT
     st.divider()
-    st.subheader("Step 5 — Save & Generate Quote")
+    st.subheader("Save & Generate Quote")
 
     terms_default = [
         "Quote valid for 30 days.",
@@ -1076,7 +1061,6 @@ if st.session_state.get("step", 1) == 2:
             }
         )
 
-    # IMPORTANT: payload uses PERSISTENT client keys (not widget keys)
     payload = {
         "client_name": (st.session_state.get("client_name", "") or "").strip(),
         "client_phone": (st.session_state.get("client_phone", "") or "").strip(),
@@ -1095,8 +1079,7 @@ if st.session_state.get("step", 1) == 2:
         "terms": terms,
     }
 
-    # Debug (keep this until you confirm fixed)
-    with st.expander("DEBUG — client fields in payload (must NOT be blank)", expanded=True):
+    with st.expander("DEBUG — client fields in payload (must NOT be blank)", expanded=False):
         st.write(
             {
                 "client_name": payload["client_name"],
