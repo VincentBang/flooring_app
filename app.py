@@ -932,16 +932,16 @@ with st.container():
     )
 
     subtotal += add_addon_row(
-        addon_key="stair_side_left",
+        addon_key="stair_triangle",
         label="Triangle step",
-        unit="side",
+        unit="si",
         qty_default=1.0,
         price_default=250.0,
         step_qty=1.0,
     )
 
     subtotal += add_addon_row(
-        addon_key="stair_side_right",
+        addon_key="stair_landing",
         label="Landing step",
         unit="side",
         qty_default=1.0,
@@ -950,7 +950,7 @@ with st.container():
     )
 
     subtotal += add_addon_row(
-        addon_key="stair_side_right",
+        addon_key="stair_side_1",
         label="Open step 1 side",
         unit="side",
         qty_default=1.0,
@@ -959,7 +959,7 @@ with st.container():
     )
 
     subtotal += add_addon_row(
-        addon_key="stair_side_right",
+        addon_key="stair_side_2",
         label="Open step 2 sides",
         unit="side",
         qty_default=1.0,
