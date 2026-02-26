@@ -924,7 +924,7 @@ with st.container():
 
     subtotal += add_addon_row(
         addon_key="stair_steps",
-        label="Stair treads (normal steps)",
+        label="Normal step",
         unit="step",
         qty_default=0.0,
         price_default=120.0,
@@ -933,7 +933,7 @@ with st.container():
 
     subtotal += add_addon_row(
         addon_key="stair_side_left",
-        label="Stair side stringer (left)",
+        label="Triangle step",
         unit="side",
         qty_default=1.0,
         price_default=250.0,
@@ -942,13 +942,30 @@ with st.container():
 
     subtotal += add_addon_row(
         addon_key="stair_side_right",
-        label="Stair side stringer (right)",
+        label="Landing step",
         unit="side",
         qty_default=1.0,
         price_default=250.0,
         step_qty=1.0,
     )
 
+    subtotal += add_addon_row(
+        addon_key="stair_side_right",
+        label="Open step 1 side",
+        unit="side",
+        qty_default=1.0,
+        price_default=250.0,
+        step_qty=1.0,
+    )
+
+    subtotal += add_addon_row(
+        addon_key="stair_side_right",
+        label="Open step 2 sides",
+        unit="side",
+        qty_default=1.0,
+        price_default=250.0,
+        step_qty=1.0,
+    )
 
 # ----------------------------------------------------
 # 3️⃣ Furniture
