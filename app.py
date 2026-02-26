@@ -799,7 +799,7 @@ st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="q
 # QUOTE BUILD
 # =========================
 st.divider()
-st.subheader("Quote Items (Core + Add-ons)")
+st.subheader("Quote Items")
 
 line_items: List[dict] = []
 subtotal = 0.0
@@ -863,7 +863,6 @@ else:
 # =========================
 
 st.divider()
-st.subheader("Add-ons (from Google Sheet)")
 
 def add_addon_row(addon_key: str, label: str, unit: str, qty_default: float, price_default: float):
     checked = st.checkbox(label, key=f"addon_{addon_key}")
