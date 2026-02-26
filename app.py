@@ -747,9 +747,9 @@ b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
 ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 # JOB MODE AFTER WASTAGE, BEFORE TIMBER
-st.divider()
-st.subheader("Work Type")
-st.radio(
+#st.divider()
+#st.subheader("Work Type")
+#st.radio(
     "Work type",
     ["Supply & Install", "Installation Only"],
     horizontal=True,
@@ -791,9 +791,9 @@ else:
     )
 
 # RETAIL/BUILDER AFTER SELECT TIMBER
-st.divider()
-st.subheader("Quote Type")
-st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
+#st.divider()
+#st.subheader("Quote Type")
+#st.selectbox("Quote type (for your own tracking)", ["Retail", "Builder"], key="quote_type")
 
 # =========================
 # QUOTE BUILD
