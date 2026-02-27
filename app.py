@@ -432,6 +432,8 @@ def build_quote_pdf(payload: dict) -> bytes:
 # STATE
 # =========================
 def ensure_state():
+    st.session_state.setdefault("load_nonce", 0)
+    st.session_state.setdefault("last_loaded_quote_id", "")
     ss = st.session_state
     ss.setdefault("rooms", [{"length": 0.0, "width": 0.0}])
     if not isinstance(ss["rooms"], list) or not ss["rooms"]:
