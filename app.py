@@ -510,7 +510,14 @@ if submitted:
             st.markdown(f"**{qid}** — {r.get('created_at','')}")
             if st.button(f"Load {qid}", key=f"load_{qid}"):
                 snapshot = r.get("payload_json", {}) or {}
-                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+            
+                # store snapshot
+                load_snapshot_into_state(snapshot)
+            
+                # FORCE rebuild of widgets
+                st.session_state["load_nonce"] += 1
+                st.session_state["last_loaded_quote_id"] = qid
+            
                 st.success(f"Loaded: {qid}")
                 st.rerun()
 
