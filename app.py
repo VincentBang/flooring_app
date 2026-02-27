@@ -552,12 +552,12 @@ for i, room in enumerate(st.session_state["rooms"]):
     with c1:
         s = st.text_input(
             "Dimensions",
-            value=st.session_state.get(f"dim_{i}", default_text),
-            key=f"dim_{i}",
+            value=default_text,
+            key=f"dim_{st.session_state['load_nonce']}_{i}",
             placeholder="e.g. 3.2x4",
             label_visibility="collapsed",
         ).strip()
-
+        
         new_room = {"length": float(room.get("length", 0.0)), "width": float(room.get("width", 0.0))}
         if s == "":
             new_room["length"] = 0.0
