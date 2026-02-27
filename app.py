@@ -183,7 +183,7 @@ def search_quotes(phone=None, address=None, name=None):
 def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""):
     ss = st.session_state
 
-    # --- clear dynamic widget keys so UI will refresh with new values ---
+    # --- clear dynamic widget keys ---
     for k in list(ss.keys()):
         if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "rem_", "sk_", "core_")):
             del ss[k]
@@ -210,15 +210,16 @@ def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""
                 })
             except Exception:
                 continue
+
     ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
 
-    # optional: keep a flag so user knows it loaded
-    ss["last_loaded_quote_id"] = loaded_quote_id or ss.get("last_loaded_quote_id", "")
+    # --- IMPORTANT: pre-fill the dim_i widget keys so Streamlit displays loaded values ---
+    for i, r in enumerate(ss["rooms"]):
+        ss[f"dim_{i}"] = fmt_dims(float(r.get("length", 0.0)), float(r.get("width", 0.0)))
 
-    # allow saving again if needed
+    ss["last_loaded_quote_id"] = loaded_quote_id or ""
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
-
 
 # =========================
 # MOBILE TEXT
