@@ -506,8 +506,9 @@ if submitted:
             qid = r.get("quote_id", "")
             st.markdown(f"**{qid}** — {r.get('created_at','')}")
             if st.button(f"Load {qid}", key=f"load_{qid}"):
-                load_snapshot_into_state(r.get("payload_json", {}) or {})
-                st.success("Loaded.")
+                snapshot = r.get("payload_json", {}) or {}
+                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+                st.success(f"Loaded: {qid}")
                 st.rerun()
 
 
