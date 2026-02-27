@@ -18,7 +18,7 @@ from reportlab.pdfgen import canvas
 # =========================
 st.set_page_config(page_title="Flooring Quote Prototype", layout="wide")
 
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzwZm_t6A48lvX3yg7W62FOtS1GK4L6ri1bgcQ4cFB0oERpqOlbJVLP9KvYQvFHsNh8w/exec"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxQ1JZ_fH53ORWx7q4-6hdP5LirqFvAIu4kVddosla9RzyYS_MOlOqBQ7NHvIxMSXyJlQ/exec"
 SHEET_ID = "10G98m8XHdySRTMWjbAUlQCZMH1NXCD6uca82xN0p4fY"
 
 COMPANY = {
