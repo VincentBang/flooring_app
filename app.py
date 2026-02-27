@@ -180,9 +180,15 @@ def search_quotes(phone=None, address=None, name=None):
         return []
 
 
-def load_snapshot_into_state(snapshot: Dict[str, Any]):
+def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""):
     ss = st.session_state
 
+    # --- clear dynamic widget keys so UI will refresh with new values ---
+    for k in list(ss.keys()):
+        if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "rem_", "sk_", "core_")):
+            del ss[k]
+
+    # --- restore core fields ---
     ss["client_name"] = str(snapshot.get("client_name", "") or "")
     ss["client_phone"] = str(snapshot.get("client_phone", "") or "")
     ss["client_email"] = str(snapshot.get("client_email", "") or "")
@@ -192,16 +198,24 @@ def load_snapshot_into_state(snapshot: Dict[str, Any]):
     ss["quote_type"] = str(snapshot.get("quote_type", ss.get("quote_type", "Retail")) or "Retail")
     ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
 
+    # --- restore rooms ---
     rooms = snapshot.get("rooms", [])
     restored_rooms = []
     if isinstance(rooms, list) and rooms:
         for r in rooms:
             try:
-                restored_rooms.append({"length": float(r.get("length", 0.0) or 0.0), "width": float(r.get("width", 0.0) or 0.0)})
+                restored_rooms.append({
+                    "length": float(r.get("length", 0.0) or 0.0),
+                    "width": float(r.get("width", 0.0) or 0.0),
+                })
             except Exception:
                 continue
     ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
 
+    # optional: keep a flag so user knows it loaded
+    ss["last_loaded_quote_id"] = loaded_quote_id or ss.get("last_loaded_quote_id", "")
+
+    # allow saving again if needed
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
 
