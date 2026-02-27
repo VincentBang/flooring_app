@@ -124,24 +124,24 @@ def save_quote_to_sheet(payload: dict) -> str:
         "sheet_id": SHEET_ID,
         "quote_id": quote_id,
         "created_at": created_at,
-
-        "quote_type": payload.get("quote_type", ""),
-        "job_mode": payload.get("job_mode", ""),
-
-        "client_name": payload.get("client_name", ""),
-        "client_phone": payload.get("client_phone", ""),
-        "client_phone_norm": payload.get("client_phone_norm", ""),
-        "client_email": payload.get("client_email", ""),
-        "site_address": payload.get("site_address", ""),
-
-        "total_area": payload.get("total_area", 0),
-        "chargeable_area": payload.get("chargeable_area", 0),
-        "wastage_pct": payload.get("wastage_pct", 0),
-        "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
-        "gst": payload.get("gst", 0),
-        "total_inc_gst": payload.get("total_inc_gst", 0),
-
+        "quote_type": payload.get("quote_type",""),
+        "job_mode": payload.get("job_mode",""),
+        "client_name": payload.get("client_name",""),
+        "client_phone": payload.get("client_phone",""),
+        "client_phone_norm": payload.get("client_phone_norm",""),
+        "client_email": payload.get("client_email",""),
+        "site_address": payload.get("site_address",""),
+        "total_area": payload.get("total_area",0),
+        "chargeable_area": payload.get("chargeable_area",0),
+        "wastage_pct": payload.get("wastage_pct",0),
+        "subtotal_ex_gst": payload.get("subtotal_ex_gst",0),
+        "gst": payload.get("gst",0),
+        "total_inc_gst": payload.get("total_inc_gst",0),
+    
+        # ✅ send both for compatibility
         "payload_json": payload,
+        "payload": payload,
+    
         "line_items": payload.get("line_items", []),
     }
 
