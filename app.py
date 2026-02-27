@@ -543,7 +543,7 @@ for i, room in enumerate(st.session_state["rooms"]):
     with c1:
         s = st.text_input(
             "Dimensions",
-            value=default_text,
+            value=st.session_state.get(f"dim_{i}", default_text),
             key=f"dim_{i}",
             placeholder="e.g. 3.2x4",
             label_visibility="collapsed",
