@@ -604,8 +604,100 @@ ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 # ---------- Work type ----------
 st.divider()
-st.subheader("Work Type")
-st.radio("Work type", ["Supply & Install", "Installation Only"], horizontal=True, key="job_mode")
+st.subheader("Work type & Product")
+
+def on_job_mode_change():
+    # Clear the other selector so UI never reuses old state
+    if st.session_state.get("job_mode") == "Supply & Install":
+        st.session_state["install_id"] = ""
+    else:
+        st.session_state["product_id"] = ""
+    st.session_state["ui_nonce"] = int(st.session_state.get("ui_nonce", 0)) + 1
+
+st.radio(
+    "Work type",
+    ["Supply & Install", "Installation Only"],
+    horizontal=True,
+    key="job_mode",
+    on_change=on_job_mode_change,
+)
+
+# ---- Select product/install after wastage ----
+if st.session_state.get("job_mode") == "Supply & Install":
+    if products_df.empty or "id" not in products_df.columns:
+        st.error("products sheet must have column: id")
+        st.stop()
+
+    # flexible column names
+    brand_col = "brand" if "brand" in products_df.columns else None
+    name_col = "name" if "name" in products_df.columns else ("label" if "label" in products_df.columns else None)
+
+    if "sell_price" in products_df.columns:
+        price_col = "sell_price"
+    elif "sell_per_m2" in products_df.columns:
+        price_col = "sell_per_m2"
+    elif "price" in products_df.columns:
+        price_col = "price"
+    else:
+        st.error("products sheet needs one of: sell_price / sell_per_m2 / price")
+        st.stop()
+
+    ids = products_df["id"].astype(str).tolist()
+    if st.session_state.get("product_id") not in ids:
+        st.session_state["product_id"] = ids[0] if ids else ""
+
+    def _fmt_product(pid: str) -> str:
+        row = products_df.loc[products_df["id"].astype(str) == str(pid)].iloc[0]
+        b = str(row.get(brand_col, "")).strip() if brand_col else ""
+        n = str(row.get(name_col, "")).strip() if name_col else str(pid)
+        return f"{b} — {n}".strip(" —")
+
+    st.selectbox(
+        "Select timber product",
+        options=ids,
+        key="product_id",
+        format_func=_fmt_product,
+    )
+
+else:
+    if install_df.empty or "id" not in install_df.columns:
+        st.error("install_only sheet must have column: id")
+        st.stop()
+
+    name_col = "name" if "name" in install_df.columns else ("label" if "label" in install_df.columns else None)
+
+    # supports your sheet even if it uses 'price' (common)
+    if "install_price" in install_df.columns:
+        price_col = "install_price"
+    elif "install_per_m2" in install_df.columns:
+        price_col = "install_per_m2"
+    elif "price" in install_df.columns:
+        price_col = "price"
+    elif "install" in install_df.columns:
+        price_col = "install"
+    else:
+        st.error("install_only sheet needs one of: install_price / install_per_m2 / price / install")
+        st.stop()
+
+    ids = install_df["id"].astype(str).tolist()
+    if st.session_state.get("install_id") not in ids:
+        st.session_state["install_id"] = ids[0] if ids else ""
+
+    def _fmt_install(iid: str) -> str:
+        row = install_df.loc[install_df["id"].astype(str) == str(iid)].iloc[0]
+        n = str(row.get(name_col, "")).strip() if name_col else str(iid)
+        return n
+
+    st.selectbox(
+        "Select installation type",
+        options=ids,
+        key="install_id",
+        format_func=_fmt_install,
+    )
+
+# quote type after selecting product/install
+st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
+
 
 
 # ---------- Select product/install (all prices from sheets) ----------
