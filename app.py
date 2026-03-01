@@ -454,6 +454,8 @@ def build_quote_pdf(payload: dict) -> bytes:
 # STATE
 # =========================
 def ensure_state():
+    st.session_state.setdefault("loaded_quote_id", "")
+    st.session_state.setdefault("loaded_line_items", [])
     if "start_new_quote" not in st.session_state:
         st.session_state["start_new_quote"] = False
 
