@@ -800,7 +800,6 @@ if "loaded_line_items" in st.session_state:
 else:
     line_items: List[dict] = []
     subtotal = 0.0
-subtotal = 0.0
 
 if st.session_state["job_mode"] == "Supply & Install":
     unit_price = st.number_input(
