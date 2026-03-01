@@ -570,14 +570,10 @@ if results:
 
                 snapshot = r.get("payload_json", {}) or {}
             
-                # Restore main fields
                 load_snapshot_into_state(snapshot, loaded_quote_id=qid)
             
-                # Restore saved line items
+                # store full items
                 st.session_state["loaded_line_items"] = r.get("line_items", [])
-            
-                # Force app to skip rebuild
-                st.session_state["quote_loaded_mode"] = True
             
                 st.success(f"Loaded: {qid}")
                 st.rerun()
