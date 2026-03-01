@@ -568,10 +568,19 @@ if results:
         with cols[1]:
             if st.button("Load", key=f"load_{qid}", use_container_width=True):
 
-                st.write("RAW OBJECT FROM SERVER:")
-                st.json(r)
+                snapshot = r.get("payload_json", {}) or {}
             
-                st.stop()
+                # Restore main fields
+                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+            
+                # Restore saved line items
+                st.session_state["loaded_line_items"] = r.get("line_items", [])
+            
+                # Force app to skip rebuild
+                st.session_state["quote_loaded_mode"] = True
+            
+                st.success(f"Loaded: {qid}")
+                st.rerun()
 else:
     # only show "No matching" after a search attempt
     if st.session_state.get("search_last_query"):
