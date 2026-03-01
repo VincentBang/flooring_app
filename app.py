@@ -879,7 +879,7 @@ else:
             label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
 
             # default lm: simple practical estimate (change multiplier anytime)
-            default_lm = max(0.0, float(total_area) * 4.0)
+            default_lm = max(0.0, float(total_area))
 
             subtotal += addon_row(
                 key=f"sk_{st.session_state['skirting_id']}",
