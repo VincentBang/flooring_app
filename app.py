@@ -524,6 +524,19 @@ def _ensure_dict(x):
 st.divider()
 st.subheader("Retrieve Existing Quote")
 
+if st.session_state.get("loaded_quote_id"):
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Edit loaded quote (switch to builder)", use_container_width=True):
+            # unlock builder (keeps rooms/client loaded)
+            st.session_state["loaded_quote_id"] = ""
+            st.rerun()
+    with c2:
+        if st.button("New quote (clear loaded)", use_container_width=True):
+            st.session_state["loaded_quote_id"] = ""
+            st.session_state["loaded_line_items"] = []
+            st.rerun()
+            
 # keep results across reruns so Load buttons work
 st.session_state.setdefault("search_results", [])
 st.session_state.setdefault("search_last_query", "")
