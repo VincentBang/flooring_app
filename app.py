@@ -689,362 +689,369 @@ is_loaded_view = bool(st.session_state.get("loaded_quote_id"))
 st.divider()
 st.subheader("Work type & Product")
 
-def on_job_mode_change():
-    # clear opposing ids and any core override so it doesn't carry across modes
+if not is_loaded_view:
+    # --- EVERYTHING that rebuilds prices goes here ---
+    def on_job_mode_change():
+        # clear opposing ids and any core override so it doesn't carry across modes
+        if st.session_state.get("job_mode") == "Supply & Install":
+            st.session_state["install_id"] = ""
+            if "core_price_install" in st.session_state:
+                del st.session_state["core_price_install"]
+            if "last_install_id" in st.session_state:
+                del st.session_state["last_install_id"]
+        else:
+            st.session_state["product_id"] = ""
+            if "core_price_supply" in st.session_state:
+                del st.session_state["core_price_supply"]
+            if "last_product_id" in st.session_state:
+                del st.session_state["last_product_id"]
+    
+    st.radio(
+        "Work type",
+        ["Supply & Install", "Installation Only"],
+        horizontal=True,
+        key="job_mode",
+        on_change=on_job_mode_change,
+    )
+    
+    product_label = ""
+    install_label = ""
+    unit_price_default = 0.0
+    
     if st.session_state.get("job_mode") == "Supply & Install":
-        st.session_state["install_id"] = ""
-        if "core_price_install" in st.session_state:
-            del st.session_state["core_price_install"]
-        if "last_install_id" in st.session_state:
-            del st.session_state["last_install_id"]
-    else:
-        st.session_state["product_id"] = ""
-        if "core_price_supply" in st.session_state:
-            del st.session_state["core_price_supply"]
-        if "last_product_id" in st.session_state:
-            del st.session_state["last_product_id"]
-
-st.radio(
-    "Work type",
-    ["Supply & Install", "Installation Only"],
-    horizontal=True,
-    key="job_mode",
-    on_change=on_job_mode_change,
-)
-
-product_label = ""
-install_label = ""
-unit_price_default = 0.0
-
-if st.session_state.get("job_mode") == "Supply & Install":
-    if products_df.empty or "id" not in products_df.columns:
-        st.error("products sheet must have column: id")
-        st.stop()
-
-    brand_col = colpick(products_df, "brand")
-    name_col = colpick(products_df, "name", "label")
-    price_col = colpick(products_df, "sell_price", "sell_per_m2", "price")
-
-    if not price_col:
-        st.error("products sheet needs one of: sell_price / sell_per_m2 / price")
-        st.stop()
-
-    ids = products_df["id"].astype(str).tolist()
-    if not ids:
-        st.error("products sheet has no active rows.")
-        st.stop()
-
-    current = st.session_state.get("product_id", "")
-    if current not in ids:
-        current = ids[0]
-        st.session_state["product_id"] = current
-
-    def _fmt_product(pid: str) -> str:
-        row = products_df.loc[products_df["id"].astype(str) == str(pid)].iloc[0]
+        if products_df.empty or "id" not in products_df.columns:
+            st.error("products sheet must have column: id")
+            st.stop()
+    
+        brand_col = colpick(products_df, "brand")
+        name_col = colpick(products_df, "name", "label")
+        price_col = colpick(products_df, "sell_price", "sell_per_m2", "price")
+    
+        if not price_col:
+            st.error("products sheet needs one of: sell_price / sell_per_m2 / price")
+            st.stop()
+    
+        ids = products_df["id"].astype(str).tolist()
+        if not ids:
+            st.error("products sheet has no active rows.")
+            st.stop()
+    
+        current = st.session_state.get("product_id", "")
+        if current not in ids:
+            current = ids[0]
+            st.session_state["product_id"] = current
+    
+        def _fmt_product(pid: str) -> str:
+            row = products_df.loc[products_df["id"].astype(str) == str(pid)].iloc[0]
+            b = str(row.get(brand_col, "")).strip() if brand_col else ""
+            n = str(row.get(name_col, "")).strip() if name_col else str(pid)
+            return f"{b} — {n}".strip(" —")
+    
+        st.selectbox(
+            "Select timber product",
+            options=ids,
+            key="product_id",
+            format_func=_fmt_product,
+        )
+    
+        # compute default from selected product
+        row = products_df.loc[products_df["id"].astype(str) == str(st.session_state["product_id"])].iloc[0]
         b = str(row.get(brand_col, "")).strip() if brand_col else ""
-        n = str(row.get(name_col, "")).strip() if name_col else str(pid)
-        return f"{b} — {n}".strip(" —")
-
-    st.selectbox(
-        "Select timber product",
-        options=ids,
-        key="product_id",
-        format_func=_fmt_product,
-    )
-
-    # compute default from selected product
-    row = products_df.loc[products_df["id"].astype(str) == str(st.session_state["product_id"])].iloc[0]
-    b = str(row.get(brand_col, "")).strip() if brand_col else ""
-    n = str(row.get(name_col, "")).strip() if name_col else ""
-    product_label = f"Supply & install — {b} {n}".strip()
-    unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
-
-    # ✅ IMPORTANT: if product changed, reset core price to sheet default
-    last_pid = st.session_state.get("last_product_id", "")
-    if last_pid != st.session_state["product_id"]:
-        st.session_state["core_price_supply"] = float(unit_price_default)
-        st.session_state["last_product_id"] = st.session_state["product_id"]
-
-else:
-    if install_df.empty or "id" not in install_df.columns:
-        st.error("install_only sheet must have column: id")
-        st.stop()
-
-    name_col = colpick(install_df, "name", "label")
-    price_col = colpick(install_df, "install_price", "install_per_m2", "price", "install")
-
-    if not price_col:
-        st.error("install_only sheet needs one of: install_price / install_per_m2 / price / install")
-        st.stop()
-
-    ids = install_df["id"].astype(str).tolist()
-    if not ids:
-        st.error("install_only sheet has no active rows.")
-        st.stop()
-
-    current = st.session_state.get("install_id", "")
-    if current not in ids:
-        current = ids[0]
-        st.session_state["install_id"] = current
-
-    def _fmt_install(iid: str) -> str:
-        row = install_df.loc[install_df["id"].astype(str) == str(iid)].iloc[0]
-        return str(row.get(name_col, iid)).strip() if name_col else str(iid)
-
-    st.selectbox(
-        "Select installation type",
-        options=ids,
-        key="install_id",
-        format_func=_fmt_install,
-    )
-
-    # compute default from selected install
-    row = install_df.loc[install_df["id"].astype(str) == str(st.session_state["install_id"])].iloc[0]
-    install_label = str(row.get(name_col, "Installation")).strip() if name_col else "Installation"
-    unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
-
-    # ✅ IMPORTANT: if install changed, reset core price to sheet default
-    last_iid = st.session_state.get("last_install_id", "")
-    if last_iid != st.session_state["install_id"]:
-        st.session_state["core_price_install"] = float(unit_price_default)
-        st.session_state["last_install_id"] = st.session_state["install_id"]
-
-# quote type after selecting product/install
-st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
-
-
-# ---------- Build line items ----------
-st.divider()
-st.subheader("Quote Items")
-
-loaded_items = st.session_state.get("loaded_line_items")
-
-if isinstance(loaded_items, list) and len(loaded_items) > 0:
-
-    # USE LOADED DATA
-    line_items = loaded_items
-    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
-
-    st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
-
-else:
-
-    # NORMAL BUILDER MODE
-    line_items: List[dict] = []
-    subtotal = 0.0
-
-
-    if st.session_state["job_mode"] == "Supply & Install":
-        unit_price = st.number_input(
-            "Supply & Install price ($/m²) (default from sheet)",
-            min_value=0.0,
-            value=float(unit_price_default),
-            step=1.0,
-            key="core_price_supply",  # keep your key
-        )
-        total = chargeable_area * unit_price
-        line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
-        subtotal += total
-
+        n = str(row.get(name_col, "")).strip() if name_col else ""
+        product_label = f"Supply & install — {b} {n}".strip()
+        unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
+    
+        # ✅ IMPORTANT: if product changed, reset core price to sheet default
+        last_pid = st.session_state.get("last_product_id", "")
+        if last_pid != st.session_state["product_id"]:
+            st.session_state["core_price_supply"] = float(unit_price_default)
+            st.session_state["last_product_id"] = st.session_state["product_id"]
+    
     else:
-        unit_price = st.number_input(
-            "Installation price ($/m²) (default from sheet)",
-            min_value=0.0,
-            value=float(unit_price_default),
-            step=1.0,
-            key="core_price_install",  # keep your key
+        if install_df.empty or "id" not in install_df.columns:
+            st.error("install_only sheet must have column: id")
+            st.stop()
+    
+        name_col = colpick(install_df, "name", "label")
+        price_col = colpick(install_df, "install_price", "install_per_m2", "price", "install")
+    
+        if not price_col:
+            st.error("install_only sheet needs one of: install_price / install_per_m2 / price / install")
+            st.stop()
+    
+        ids = install_df["id"].astype(str).tolist()
+        if not ids:
+            st.error("install_only sheet has no active rows.")
+            st.stop()
+    
+        current = st.session_state.get("install_id", "")
+        if current not in ids:
+            current = ids[0]
+            st.session_state["install_id"] = current
+    
+        def _fmt_install(iid: str) -> str:
+            row = install_df.loc[install_df["id"].astype(str) == str(iid)].iloc[0]
+            return str(row.get(name_col, iid)).strip() if name_col else str(iid)
+    
+        st.selectbox(
+            "Select installation type",
+            options=ids,
+            key="install_id",
+            format_func=_fmt_install,
         )
-        total = total_area * unit_price
-        line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
-        subtotal += total
-
-        # ensure builder items are stored so totals/payload use correct list
-        st.session_state["loaded_line_items"] = line_items
-
-
-# ---------- Add-ons ----------
-st.divider()
-st.subheader("Add-ons")
-
-def addon_row(key: str, label: str, unit: str, qty_default: float, price_default: float) -> float:
-    checked = st.checkbox(label, key=f"addon_{key}")
-    if not checked:
-        return 0.0
-
-    unit_norm = (unit or "").strip().lower().replace(" ", "")
-    if unit_norm in ("m2", "m²"):
-        step_qty = 0.1
-        unit_display = "m²"
-    elif unit_norm in ("room", "rooms"):
-        step_qty = 1.0
-        unit_display = "room"
-    elif unit_norm in ("lm", "linemeter", "linearmeter"):
-        step_qty = 0.5
-        unit_display = "lm"
+    
+        # compute default from selected install
+        row = install_df.loc[install_df["id"].astype(str) == str(st.session_state["install_id"])].iloc[0]
+        install_label = str(row.get(name_col, "Installation")).strip() if name_col else "Installation"
+        unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
+    
+        # ✅ IMPORTANT: if install changed, reset core price to sheet default
+        last_iid = st.session_state.get("last_install_id", "")
+        if last_iid != st.session_state["install_id"]:
+            st.session_state["core_price_install"] = float(unit_price_default)
+            st.session_state["last_install_id"] = st.session_state["install_id"]
+    
+    # quote type after selecting product/install
+    st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
+    
+    
+    # ---------- Build line items ----------
+    st.divider()
+    st.subheader("Quote Items")
+    
+    loaded_items = st.session_state.get("loaded_line_items")
+    
+    if isinstance(loaded_items, list) and len(loaded_items) > 0:
+    
+        # USE LOADED DATA
+        line_items = loaded_items
+        subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
+    
+        st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
+    
     else:
-        step_qty = 1.0
-        unit_display = unit if unit else "each"
-
-    c1, c2 = st.columns([1.1, 1.0], gap="small")
-    with c1:
-        qty = st.number_input(
-            "Qty",
-            min_value=0.0,
-            value=float(st.session_state.get(f"addon_qty_{key}", qty_default)),
-            step=step_qty,
-            key=f"addon_qty_{key}",
-            label_visibility="collapsed",
-        )
-        st.caption(unit_display)
-    with c2:
-        price = st.number_input(
-            "Price",
-            min_value=0.0,
-            value=float(st.session_state.get(f"addon_price_{key}", price_default)),
-            step=1.0,
-            key=f"addon_price_{key}",
-            label_visibility="collapsed",
-        )
-        st.caption(f"per {unit_display}")
-
-    total = float(qty) * float(price)
-    line_items.append(line_item(label, f"{qty:.2f} {unit_display}", float(price), total))
-    return total
-
-
-# Removal from removal tab
-st.markdown("### Removal & Disposal")
-if removal_df.empty:
-    st.caption("No rows in sheet tab 'removal'.")
-else:
-    rid_col = colpick(removal_df, "id")
-    name_col = colpick(removal_df, "name", "label")
-    price_col = colpick(removal_df, "remove_per_m2", "price", "rate")
-
-    if not (rid_col and name_col and price_col):
-        st.error("Removal sheet needs columns: id, name(or label), remove_per_m2(or price).")
-    else:
-        for _, r in removal_df.iterrows():
-            rid = str(r.get(rid_col, "")).strip()
-            nm = str(r.get(name_col, "")).strip()
-            pr = safe_float(r.get(price_col, 0.0), 0.0)
-            if not rid or not nm:
-                continue
-            subtotal += addon_row(
-                key=f"rem_{rid}",
-                label=f"{nm}",
-                unit="m²",
-                qty_default=float(total_area),
-                price_default=float(pr),
+    
+        # NORMAL BUILDER MODE
+        line_items: List[dict] = []
+        subtotal = 0.0
+    
+    
+        if st.session_state["job_mode"] == "Supply & Install":
+            unit_price = st.number_input(
+                "Supply & Install price ($/m²) (default from sheet)",
+                min_value=0.0,
+                value=float(unit_price_default),
+                step=1.0,
+                key="core_price_supply",  # keep your key
             )
-
-
-# Addons from addons tab grouped by category
-if addons_df.empty:
-    st.caption("No rows in sheet tab 'addons'.")
-else:
-    colmap = {norm_colname(c): c for c in addons_df.columns}
-    id_col = colmap.get("id")
-    cat_col = colmap.get("category")  # your sheet uses category
-    label_col = colmap.get("label") or colmap.get("name")
-    unit_col = colmap.get("unit")
-    price_col = colmap.get("price") or colmap.get("rate")
-
-    if not (id_col and cat_col and label_col and unit_col and price_col):
-        st.error("Addons sheet needs: id, category, label, unit, price (active optional).")
+            total = chargeable_area * unit_price
+            line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
+            subtotal += total
+    
+        else:
+            unit_price = st.number_input(
+                "Installation price ($/m²) (default from sheet)",
+                min_value=0.0,
+                value=float(unit_price_default),
+                step=1.0,
+                key="core_price_install",  # keep your key
+            )
+            total = total_area * unit_price
+            line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
+            subtotal += total
+    
+            # ensure builder items are stored so totals/payload use correct list
+            st.session_state["loaded_line_items"] = line_items
+    
+    
+    # ---------- Add-ons ----------
+    st.divider()
+    st.subheader("Add-ons")
+    
+    def addon_row(key: str, label: str, unit: str, qty_default: float, price_default: float) -> float:
+        checked = st.checkbox(label, key=f"addon_{key}")
+        if not checked:
+            return 0.0
+    
+        unit_norm = (unit or "").strip().lower().replace(" ", "")
+        if unit_norm in ("m2", "m²"):
+            step_qty = 0.1
+            unit_display = "m²"
+        elif unit_norm in ("room", "rooms"):
+            step_qty = 1.0
+            unit_display = "room"
+        elif unit_norm in ("lm", "linemeter", "linearmeter"):
+            step_qty = 0.5
+            unit_display = "lm"
+        else:
+            step_qty = 1.0
+            unit_display = unit if unit else "each"
+    
+        c1, c2 = st.columns([1.1, 1.0], gap="small")
+        with c1:
+            qty = st.number_input(
+                "Qty",
+                min_value=0.0,
+                value=float(st.session_state.get(f"addon_qty_{key}", qty_default)),
+                step=step_qty,
+                key=f"addon_qty_{key}",
+                label_visibility="collapsed",
+            )
+            st.caption(unit_display)
+        with c2:
+            price = st.number_input(
+                "Price",
+                min_value=0.0,
+                value=float(st.session_state.get(f"addon_price_{key}", price_default)),
+                step=1.0,
+                key=f"addon_price_{key}",
+                label_visibility="collapsed",
+            )
+            st.caption(f"per {unit_display}")
+    
+        total = float(qty) * float(price)
+        line_items.append(line_item(label, f"{qty:.2f} {unit_display}", float(price), total))
+        return total
+    
+    
+    # Removal from removal tab
+    st.markdown("### Removal & Disposal")
+    if removal_df.empty:
+        st.caption("No rows in sheet tab 'removal'.")
     else:
-        grouped: Dict[str, List[dict]] = {}
-        for _, r in addons_df.iterrows():
-            aid = str(r.get(id_col, "")).strip()
-            cat = str(r.get(cat_col, "")).strip().lower()
-            lab = str(r.get(label_col, "")).strip()
-            unit = str(r.get(unit_col, "")).strip()
-            pr = safe_float(r.get(price_col, 0.0), 0.0)
-            if not aid or not lab:
-                continue
-            grouped.setdefault(cat, []).append({"id": aid, "label": lab, "unit": unit, "price": pr})
-
-        order = []
-        if "step" in grouped:
-            order.append("step")
-        order += sorted([k for k in grouped.keys() if k != "step"])
-
-        for cat in order:
-            title = "Stairs" if cat == "step" else cat.title()
-            st.markdown(f"### {title}")
-
-            for item in grouped[cat]:
-                unit_norm = (item["unit"] or "").strip().lower().replace(" ", "")
-                if unit_norm in ("m2", "m²"):
-                    qty_default = float(chargeable_area)
-                elif unit_norm in ("room", "rooms"):
-                    qty_default = float(len(st.session_state["rooms"]))
-                else:
-                    qty_default = 1.0
-
+        rid_col = colpick(removal_df, "id")
+        name_col = colpick(removal_df, "name", "label")
+        price_col = colpick(removal_df, "remove_per_m2", "price", "rate")
+    
+        if not (rid_col and name_col and price_col):
+            st.error("Removal sheet needs columns: id, name(or label), remove_per_m2(or price).")
+        else:
+            for _, r in removal_df.iterrows():
+                rid = str(r.get(rid_col, "")).strip()
+                nm = str(r.get(name_col, "")).strip()
+                pr = safe_float(r.get(price_col, 0.0), 0.0)
+                if not rid or not nm:
+                    continue
                 subtotal += addon_row(
-                    key=f"addon_{item['id']}",
-                    label=item["label"],
-                    unit=item["unit"],
-                    qty_default=qty_default,
-                    price_default=float(item["price"]),
+                    key=f"rem_{rid}",
+                    label=f"{nm}",
+                    unit="m²",
+                    qty_default=float(total_area),
+                    price_default=float(pr),
                 )
-
-
-# Skirting from skirting tab
-st.markdown("### Skirting")
-if skirting_df.empty:
-    st.caption("No rows in sheet tab 'skirting'.")
-else:
-    sid_col = colpick(skirting_df, "id")
-    h_col = colpick(skirting_df, "height_mm", "height")
-    price_col = colpick(skirting_df, "price_per_lm", "price")
-
-    if not (sid_col and price_col):
-        st.error("Skirting sheet needs columns: id, price_per_lm (or price).")
+    
+    
+    # Addons from addons tab grouped by category
+    if addons_df.empty:
+        st.caption("No rows in sheet tab 'addons'.")
     else:
-        skirting_df["_sid"] = skirting_df[sid_col].astype(str)
-        options = skirting_df["_sid"].tolist()
-
-        def _sk_fmt(sid: str) -> str:
-            row = skirting_df[skirting_df["_sid"] == str(sid)]
-            if row.empty:
+        colmap = {norm_colname(c): c for c in addons_df.columns}
+        id_col = colmap.get("id")
+        cat_col = colmap.get("category")  # your sheet uses category
+        label_col = colmap.get("label") or colmap.get("name")
+        unit_col = colmap.get("unit")
+        price_col = colmap.get("price") or colmap.get("rate")
+    
+        if not (id_col and cat_col and label_col and unit_col and price_col):
+            st.error("Addons sheet needs: id, category, label, unit, price (active optional).")
+        else:
+            grouped: Dict[str, List[dict]] = {}
+            for _, r in addons_df.iterrows():
+                aid = str(r.get(id_col, "")).strip()
+                cat = str(r.get(cat_col, "")).strip().lower()
+                lab = str(r.get(label_col, "")).strip()
+                unit = str(r.get(unit_col, "")).strip()
+                pr = safe_float(r.get(price_col, 0.0), 0.0)
+                if not aid or not lab:
+                    continue
+                grouped.setdefault(cat, []).append({"id": aid, "label": lab, "unit": unit, "price": pr})
+    
+            order = []
+            if "step" in grouped:
+                order.append("step")
+            order += sorted([k for k in grouped.keys() if k != "step"])
+    
+            for cat in order:
+                title = "Stairs" if cat == "step" else cat.title()
+                st.markdown(f"### {title}")
+    
+                for item in grouped[cat]:
+                    unit_norm = (item["unit"] or "").strip().lower().replace(" ", "")
+                    if unit_norm in ("m2", "m²"):
+                        qty_default = float(chargeable_area)
+                    elif unit_norm in ("room", "rooms"):
+                        qty_default = float(len(st.session_state["rooms"]))
+                    else:
+                        qty_default = 1.0
+    
+                    subtotal += addon_row(
+                        key=f"addon_{item['id']}",
+                        label=item["label"],
+                        unit=item["unit"],
+                        qty_default=qty_default,
+                        price_default=float(item["price"]),
+                    )
+    
+    
+    # Skirting from skirting tab
+    st.markdown("### Skirting")
+    if skirting_df.empty:
+        st.caption("No rows in sheet tab 'skirting'.")
+    else:
+        sid_col = colpick(skirting_df, "id")
+        h_col = colpick(skirting_df, "height_mm", "height")
+        price_col = colpick(skirting_df, "price_per_lm", "price")
+    
+        if not (sid_col and price_col):
+            st.error("Skirting sheet needs columns: id, price_per_lm (or price).")
+        else:
+            skirting_df["_sid"] = skirting_df[sid_col].astype(str)
+            options = skirting_df["_sid"].tolist()
+    
+            def _sk_fmt(sid: str) -> str:
+                row = skirting_df[skirting_df["_sid"] == str(sid)]
+                if row.empty:
+                    return str(sid)
+                r = row.iloc[0]
+                if h_col:
+                    return f"{int(safe_float(r.get(h_col, 0), 0))}mm"
                 return str(sid)
-            r = row.iloc[0]
-            if h_col:
-                return f"{int(safe_float(r.get(h_col, 0), 0))}mm"
-            return str(sid)
+    
+            st.session_state.setdefault("skirting_id", options[0] if options else "")
+            st.selectbox("Skirting height", options=options, format_func=_sk_fmt, key="skirting_id")
+    
+            row = skirting_df[skirting_df["_sid"] == str(st.session_state.get("skirting_id", ""))]
+            if not row.empty:
+                r = row.iloc[0]
+                price = safe_float(r.get(price_col, 0.0), 0.0)
+                label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
+    
+                # default lm: simple practical estimate (change multiplier anytime)
+                default_lm = max(0.0, float(chargeable_area))
+    
+                subtotal += addon_row(
+                    key=f"sk_{st.session_state['skirting_id']}",
+                    label=label,
+                    unit="lm",
+                    qty_default=default_lm,
+                    price_default=float(price),
+                )
+    
+    
+    # ✅ FINAL OVERRIDE: if a quote was loaded, force line_items/subtotal to loaded values
+    _loaded = st.session_state.get("loaded_line_items", [])
+    if isinstance(_loaded, list) and len(_loaded) > 0:
+        line_items = _loaded
+        subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
+    
+    if isinstance(_loaded, list) and len(_loaded) > 0:
+        st.subheader("Loaded quote items (from Google Sheet)")
+        st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
+    pass
+else:
+    st.info("Viewing a saved quote. Pricing inputs are disabled to prevent overwriting saved items.")
 
-        st.session_state.setdefault("skirting_id", options[0] if options else "")
-        st.selectbox("Skirting height", options=options, format_func=_sk_fmt, key="skirting_id")
 
-        row = skirting_df[skirting_df["_sid"] == str(st.session_state.get("skirting_id", ""))]
-        if not row.empty:
-            r = row.iloc[0]
-            price = safe_float(r.get(price_col, 0.0), 0.0)
-            label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
-
-            # default lm: simple practical estimate (change multiplier anytime)
-            default_lm = max(0.0, float(chargeable_area))
-
-            subtotal += addon_row(
-                key=f"sk_{st.session_state['skirting_id']}",
-                label=label,
-                unit="lm",
-                qty_default=default_lm,
-                price_default=float(price),
-            )
-
-
-# ✅ FINAL OVERRIDE: if a quote was loaded, force line_items/subtotal to loaded values
-_loaded = st.session_state.get("loaded_line_items", [])
-if isinstance(_loaded, list) and len(_loaded) > 0:
-    line_items = _loaded
-    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
-
-if isinstance(_loaded, list) and len(_loaded) > 0:
-    st.subheader("Loaded quote items (from Google Sheet)")
-    st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
 
 # ---------- Totals ----------
 st.divider()
