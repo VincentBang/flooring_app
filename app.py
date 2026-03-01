@@ -800,7 +800,12 @@ st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
 st.divider()
 st.subheader("Quote Items")
 
-line_items: List[dict] = []
+if "loaded_line_items" in st.session_state:
+    line_items = st.session_state["loaded_line_items"]
+    subtotal = sum(float(li.get("total", 0)) for li in line_items)
+else:
+    line_items: List[dict] = []
+    subtotal = 0.0
 subtotal = 0.0
 
 if st.session_state["job_mode"] == "Supply & Install":
