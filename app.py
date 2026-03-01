@@ -51,9 +51,9 @@ def load_sheet(tab_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     # filter active rows if column exists (case-insensitive)
-    lower_cols = [c.lower() for c in df.columns]
-    if "active" in lower_cols:
-        active_col = df.columns[lower_cols.index("active")]
+    cols_norm = {str(c).strip().lower(): c for c in df.columns}
+    if "active" in cols_norm:
+        active_col = cols_norm["active"]
         active = df[active_col].astype(str).str.strip().str.lower()
         df = df[active.isin(["true", "1", "yes", "y"])]
 
@@ -104,15 +104,14 @@ def parse_dims(text: str):
 def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
     return {"label": str(label), "qty_str": str(qty_str), "unit_price": float(unit_price), "total": float(total)}
 
-def safe_pick_id_local(df: pd.DataFrame, current_id: str, id_col: str = "id") -> str:
-    """Return a safe id WITHOUT mutating session_state (avoids StreamlitAPIException)."""
-    if df is None or df.empty or id_col not in df.columns:
-        return str(current_id or "")
-    ids = df[id_col].astype(str).tolist()
-    if not ids:
-        return ""
-    cur = str(current_id or "")
-    return cur if cur in ids else ids[0]
+def colpick(df: pd.DataFrame, *names: str) -> str | None:
+    for n in names:
+        if n in df.columns:
+            return n
+    return None
+
+def norm_colname(c: str) -> str:
+    return str(c or "").strip().lower().replace(" ", "").replace("_", "")
 
 
 # =========================
@@ -126,30 +125,30 @@ def save_quote_to_sheet(payload: dict) -> str:
         "sheet_id": SHEET_ID,
         "quote_id": quote_id,
         "created_at": created_at,
-        "quote_type": payload.get("quote_type",""),
-        "job_mode": payload.get("job_mode",""),
-        "client_name": payload.get("client_name",""),
-        "client_phone": payload.get("client_phone",""),
-        "client_phone_norm": payload.get("client_phone_norm",""),
-        "client_email": payload.get("client_email",""),
-        "site_address": payload.get("site_address",""),
-        "total_area": payload.get("total_area",0),
-        "chargeable_area": payload.get("chargeable_area",0),
-        "wastage_pct": payload.get("wastage_pct",0),
-        "subtotal_ex_gst": payload.get("subtotal_ex_gst",0),
-        "gst": payload.get("gst",0),
-        "total_inc_gst": payload.get("total_inc_gst",0),
+        "quote_type": payload.get("quote_type", ""),
+        "job_mode": payload.get("job_mode", ""),
+        "client_name": payload.get("client_name", ""),
+        "client_phone": payload.get("client_phone", ""),          # keep leading 0 (as typed)
+        "client_phone_norm": payload.get("client_phone_norm", ""),# normalized digits for search
+        "client_email": payload.get("client_email", ""),
+        "site_address": payload.get("site_address", ""),
+        "total_area": payload.get("total_area", 0),
+        "chargeable_area": payload.get("chargeable_area", 0),
+        "wastage_pct": payload.get("wastage_pct", 0),
+        "subtotal_ex_gst": payload.get("subtotal_ex_gst", 0),
+        "gst": payload.get("gst", 0),
+        "total_inc_gst": payload.get("total_inc_gst", 0),
 
-        # send both for compatibility with your GAS
+        # compatibility
         "payload_json": payload,
         "payload": payload,
-
         "line_items": payload.get("line_items", []),
     }
 
     r = requests.post(APPS_SCRIPT_URL, json=record, timeout=25)
     r.raise_for_status()
     return quote_id
+
 
 def search_quotes(phone=None, address=None, name=None):
     phone = (phone or "").strip()
@@ -181,6 +180,7 @@ def search_quotes(phone=None, address=None, name=None):
         st.code((r.text or "")[:1200])
         return []
 
+
 def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""):
     ss = st.session_state
 
@@ -199,24 +199,20 @@ def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""
     ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
 
     rooms = snapshot.get("rooms", [])
-    restored_rooms = []
+    restored = []
     if isinstance(rooms, list) and rooms:
         for r in rooms:
             try:
-                restored_rooms.append({
-                    "length": float(r.get("length", 0.0) or 0.0),
-                    "width": float(r.get("width", 0.0) or 0.0),
-                })
+                restored.append({"length": float(r.get("length", 0.0) or 0.0), "width": float(r.get("width", 0.0) or 0.0)})
             except Exception:
                 continue
-    ss["rooms"] = restored_rooms if restored_rooms else [{"length": 0.0, "width": 0.0}]
+    ss["rooms"] = restored if restored else [{"length": 0.0, "width": 0.0}]
 
+    # force rebuild of measurement widgets
+    ss["load_nonce"] = int(ss.get("load_nonce", 0)) + 1
     ss["last_loaded_quote_id"] = loaded_quote_id or ""
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
-
-    # bump nonce so widget keys change and show loaded values
-    ss["load_nonce"] = int(ss.get("load_nonce", 0)) + 1
 
 
 # =========================
@@ -470,6 +466,7 @@ addons_df = load_sheet("addons")
 st.title("📱 Flooring Quote Prototype")
 st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {COMPANY['email']}")
 
+
 # ---------- Retrieve quote ----------
 st.divider()
 st.subheader("Retrieve Existing Quote")
@@ -482,7 +479,6 @@ with st.form("quote_search_form", clear_on_submit=False):
         search_address = st.text_input("Search by address", key="search_address")
     with c3:
         search_name = st.text_input("Search by name", key="search_name")
-
     submitted = st.form_submit_button("Search", use_container_width=True)
 
 if submitted:
@@ -571,7 +567,6 @@ st.button("➕ Add Room", on_click=add_room)
 
 total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state["rooms"])
 
-# wastage after measurement
 st.markdown("---")
 wastage_pct = st.number_input(
     "Wastage (%)",
@@ -589,111 +584,102 @@ b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
 ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 
-# ---------- Work type & selection (SINGLE block only) ----------
+# ---------- Work type & Product (THIS is the only selector block now) ----------
 st.divider()
 st.subheader("Work type & Product")
+
+def on_job_mode_change():
+    # clear opposing ids and any core override so it doesn't carry across modes
+    if st.session_state.get("job_mode") == "Supply & Install":
+        st.session_state["install_id"] = ""
+    else:
+        st.session_state["product_id"] = ""
+    for k in ["core_price_supply", "core_price_install"]:
+        if k in st.session_state:
+            del st.session_state[k]
 
 st.radio(
     "Work type",
     ["Supply & Install", "Installation Only"],
     horizontal=True,
     key="job_mode",
+    on_change=on_job_mode_change,
 )
 
-# Decide selection options without mutating widget keys
-job_mode = st.session_state.get("job_mode", "Supply & Install")
-
-product_label = "Supply & Install"
-install_label = "Installation"
+product_label = ""
+install_label = ""
 unit_price_default = 0.0
 
-if job_mode == "Supply & Install":
+if st.session_state.get("job_mode") == "Supply & Install":
     if products_df.empty or "id" not in products_df.columns:
         st.error("products sheet must have column: id")
         st.stop()
 
-    brand_col = "brand" if "brand" in products_df.columns else None
-    name_col = "name" if "name" in products_df.columns else ("label" if "label" in products_df.columns else None)
+    brand_col = colpick(products_df, "brand")
+    name_col = colpick(products_df, "name", "label")
+    price_col = colpick(products_df, "sell_price", "sell_per_m2", "price")
 
-    if "sell_price" in products_df.columns:
-        price_col = "sell_price"
-    elif "sell_per_m2" in products_df.columns:
-        price_col = "sell_per_m2"
-    elif "price" in products_df.columns:
-        price_col = "price"
-    else:
+    if not price_col:
         st.error("products sheet needs one of: sell_price / sell_per_m2 / price")
         st.stop()
 
     ids = products_df["id"].astype(str).tolist()
-    current_pid = safe_pick_id_local(products_df, st.session_state.get("product_id", ""), "id")
-    index = ids.index(current_pid) if current_pid in ids else 0
+    current = st.session_state.get("product_id", "")
+    if current not in ids:
+        current = ids[0] if ids else ""
+        st.session_state["product_id"] = current
 
     def _fmt_product(pid: str) -> str:
-        row = products_df.loc[products_df["id"].astype(str) == str(pid)]
-        if row.empty:
-            return str(pid)
-        r = row.iloc[0]
-        b = str(r.get(brand_col, "")).strip() if brand_col else ""
-        n = str(r.get(name_col, "")).strip() if name_col else str(pid)
+        row = products_df.loc[products_df["id"].astype(str) == str(pid)].iloc[0]
+        b = str(row.get(brand_col, "")).strip() if brand_col else ""
+        n = str(row.get(name_col, "")).strip() if name_col else str(pid)
         return f"{b} — {n}".strip(" —")
 
-    pid = st.selectbox(
+    st.selectbox(
         "Select timber product",
         options=ids,
-        index=index,
         key="product_id",
         format_func=_fmt_product,
     )
 
-    product_row = products_df.loc[products_df["id"].astype(str) == str(pid)].iloc[0]
-    brand = str(product_row.get(brand_col, "")).strip() if brand_col else ""
-    name = str(product_row.get(name_col, "")).strip() if name_col else ""
-    product_label = f"Supply & install — {brand} {name}".strip()
-
-    unit_price_default = safe_float(product_row.get(price_col, 0.0), 0.0)
+    row = products_df.loc[products_df["id"].astype(str) == str(st.session_state["product_id"])].iloc[0]
+    b = str(row.get(brand_col, "")).strip() if brand_col else ""
+    n = str(row.get(name_col, "")).strip() if name_col else ""
+    product_label = f"Supply & install — {b} {n}".strip()
+    unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
 
 else:
     if install_df.empty or "id" not in install_df.columns:
         st.error("install_only sheet must have column: id")
         st.stop()
 
-    name_col = "name" if "name" in install_df.columns else ("label" if "label" in install_df.columns else None)
-    if "install_price" in install_df.columns:
-        price_col = "install_price"
-    elif "install_per_m2" in install_df.columns:
-        price_col = "install_per_m2"
-    elif "price" in install_df.columns:
-        price_col = "price"
-    elif "install" in install_df.columns:
-        price_col = "install"
-    else:
+    name_col = colpick(install_df, "name", "label")
+    price_col = colpick(install_df, "install_price", "install_per_m2", "price", "install")
+
+    if not price_col:
         st.error("install_only sheet needs one of: install_price / install_per_m2 / price / install")
         st.stop()
 
     ids = install_df["id"].astype(str).tolist()
-    current_iid = safe_pick_id_local(install_df, st.session_state.get("install_id", ""), "id")
-    index = ids.index(current_iid) if current_iid in ids else 0
+    current = st.session_state.get("install_id", "")
+    if current not in ids:
+        current = ids[0] if ids else ""
+        st.session_state["install_id"] = current
 
     def _fmt_install(iid: str) -> str:
-        row = install_df.loc[install_df["id"].astype(str) == str(iid)]
-        if row.empty:
-            return str(iid)
-        r = row.iloc[0]
-        n = str(r.get(name_col, "")).strip() if name_col else str(iid)
-        return n
+        row = install_df.loc[install_df["id"].astype(str) == str(iid)].iloc[0]
+        return str(row.get(name_col, iid)).strip() if name_col else str(iid)
 
-    iid = st.selectbox(
+    st.selectbox(
         "Select installation type",
         options=ids,
-        index=index,
         key="install_id",
         format_func=_fmt_install,
     )
 
-    ins_row = install_df.loc[install_df["id"].astype(str) == str(iid)].iloc[0]
-    install_label = str(ins_row.get(name_col, "Installation")).strip() if name_col else "Installation"
-    unit_price_default = safe_float(ins_row.get(price_col, 0.0), 0.0)
+    row = install_df.loc[install_df["id"].astype(str) == str(st.session_state["install_id"])].iloc[0]
+    install_label = str(row.get(name_col, "Installation")).strip() if name_col else "Installation"
+    unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
 
 # quote type after selecting product/install
 st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
@@ -706,16 +692,16 @@ st.subheader("Quote Items")
 line_items: List[dict] = []
 subtotal = 0.0
 
-if job_mode == "Supply & Install":
+if st.session_state["job_mode"] == "Supply & Install":
     unit_price = st.number_input(
         "Supply & Install price ($/m²) (default from sheet)",
         min_value=0.0,
         value=float(unit_price_default),
         step=1.0,
-        key="core_price_override",
+        key="core_price_supply",
     )
     total = chargeable_area * unit_price
-    line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
+    line_items.append(line_item(product_label or "Supply & install", f"{chargeable_area:.2f} m²", unit_price, total))
     subtotal += total
 else:
     unit_price = st.number_input(
@@ -723,10 +709,10 @@ else:
         min_value=0.0,
         value=float(unit_price_default),
         step=1.0,
-        key="core_price_override",
+        key="core_price_install",
     )
     total = total_area * unit_price
-    line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
+    line_items.append(line_item(install_label or "Installation", f"{total_area:.2f} m²", unit_price, total))
     subtotal += total
 
 
@@ -746,8 +732,8 @@ def addon_row(key: str, label: str, unit: str, qty_default: float, price_default
     elif unit_norm in ("room", "rooms"):
         step_qty = 1.0
         unit_display = "room"
-    elif unit_norm in ("lm", "l/m", "linearmetre", "linearmeter"):
-        step_qty = 0.1
+    elif unit_norm in ("lm", "linemeter", "linearmeter"):
+        step_qty = 0.5
         unit_display = "lm"
     else:
         step_qty = 1.0
@@ -780,17 +766,11 @@ def addon_row(key: str, label: str, unit: str, qty_default: float, price_default
     return total
 
 
-# Removal
+# Removal from removal tab
 st.markdown("### Removal & Disposal")
 if removal_df.empty:
     st.caption("No rows in sheet tab 'removal'.")
 else:
-    def colpick(df, *names):
-        for n in names:
-            if n in df.columns:
-                return n
-        return None
-
     rid_col = colpick(removal_df, "id")
     name_col = colpick(removal_df, "name", "label")
     price_col = colpick(removal_df, "remove_per_m2", "price", "rate")
@@ -812,16 +792,14 @@ else:
                 price_default=float(pr),
             )
 
-# Addons tab (category-based)
+
+# Addons from addons tab grouped by category
 if addons_df.empty:
     st.caption("No rows in sheet tab 'addons'.")
 else:
-    def norm_col(c: str) -> str:
-        return str(c or "").strip().lower().replace(" ", "").replace("_", "")
-
-    colmap = {norm_col(c): c for c in addons_df.columns}
+    colmap = {norm_colname(c): c for c in addons_df.columns}
     id_col = colmap.get("id")
-    cat_col = colmap.get("category")  # your sheet uses 'category'
+    cat_col = colmap.get("category")  # your sheet uses category
     label_col = colmap.get("label") or colmap.get("name")
     unit_col = colmap.get("unit")
     price_col = colmap.get("price") or colmap.get("rate")
@@ -866,21 +844,21 @@ else:
                     price_default=float(item["price"]),
                 )
 
-# Skirting (FIX: qty default from TOTAL AREA, not 0)
+
+# Skirting from skirting tab
 st.markdown("### Skirting")
 if skirting_df.empty:
     st.caption("No rows in sheet tab 'skirting'.")
 else:
-    sid_col = "id" if "id" in skirting_df.columns else None
-    h_col = "height_mm" if "height_mm" in skirting_df.columns else None
-    price_col = "price_per_lm" if "price_per_lm" in skirting_df.columns else ("price" if "price" in skirting_df.columns else None)
+    sid_col = colpick(skirting_df, "id")
+    h_col = colpick(skirting_df, "height_mm", "height")
+    price_col = colpick(skirting_df, "price_per_lm", "price")
 
     if not (sid_col and price_col):
         st.error("Skirting sheet needs columns: id, price_per_lm (or price).")
     else:
         skirting_df["_sid"] = skirting_df[sid_col].astype(str)
         options = skirting_df["_sid"].tolist()
-        st.session_state.setdefault("skirting_id", options[0] if options else "")
 
         def _sk_fmt(sid: str) -> str:
             row = skirting_df[skirting_df["_sid"] == str(sid)]
@@ -891,6 +869,7 @@ else:
                 return f"{int(safe_float(r.get(h_col, 0), 0))}mm"
             return str(sid)
 
+        st.session_state.setdefault("skirting_id", options[0] if options else "")
         st.selectbox("Skirting height", options=options, format_func=_sk_fmt, key="skirting_id")
 
         row = skirting_df[skirting_df["_sid"] == str(st.session_state.get("skirting_id", ""))]
@@ -899,12 +878,14 @@ else:
             price = safe_float(r.get(price_col, 0.0), 0.0)
             label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
 
-            # ✅ your request: default qty from TOTAL AREA
+            # default lm: simple practical estimate (change multiplier anytime)
+            default_lm = max(0.0, float(total_area) * 4.0)
+
             subtotal += addon_row(
                 key=f"sk_{st.session_state['skirting_id']}",
                 label=label,
-                unit="m²",
-                qty_default=float(total_area),
+                unit="lm",
+                qty_default=default_lm,
                 price_default=float(price),
             )
 
@@ -955,7 +936,7 @@ for i, r in enumerate(st.session_state["rooms"]):
 
 payload = {
     "client_name": (st.session_state.get("client_name", "") or "").strip(),
-    "client_phone": (st.session_state.get("client_phone", "") or "").strip(),  # keep leading 0 in stored display
+    "client_phone": (st.session_state.get("client_phone", "") or "").strip(),  # KEEP typed phone
     "client_phone_norm": norm_phone(st.session_state.get("client_phone", "")),
     "client_email": (st.session_state.get("client_email", "") or "").strip(),
     "site_address": (st.session_state.get("site_address", "") or "").strip(),
@@ -984,6 +965,7 @@ def handle_save():
         st.session_state["quote_saved"] = True
         st.session_state["last_quote_id"] = qid
         st.success(f"Quote saved: {qid}")
+
 
 # ---------- Output ----------
 st.divider()
