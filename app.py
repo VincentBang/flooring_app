@@ -567,19 +567,13 @@ if results:
 
         with cols[1]:
             if st.button("Load", key=f"load_{qid}", use_container_width=True):
-                snapshot = {}
-                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
-                
-                # Inject correct line items from Apps Script
-                if "line_items" in r:
-                    st.session_state["loaded_line_items"] = r["line_items"]
-                else:
-                    st.session_state["loaded_line_items"] = []
-                
-                st.rerun()
-                
 
-                # optional: show a banner after rerun so you KNOW it loaded
+                snapshot = r.get("payload_json", {}) or {}
+                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+            
+                # Inject full line items from quote_items
+                st.session_state["loaded_line_items"] = r.get("line_items", [])
+            
                 st.session_state["loaded_banner"] = f"Loaded: {qid}"
                 st.rerun()
 else:
