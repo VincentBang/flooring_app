@@ -496,8 +496,28 @@ st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {
 
 
 # ---------- Retrieve quote ----------
+def _ensure_dict(x):
+    """payload_json may be dict OR JSON string OR None"""
+    if x is None:
+        return {}
+    if isinstance(x, dict):
+        return x
+    if isinstance(x, str):
+        try:
+            obj = json.loads(x)
+            return obj if isinstance(obj, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+# ---------- Retrieve quote ----------
 st.divider()
 st.subheader("Retrieve Existing Quote")
+
+# keep results across reruns so Load buttons work
+st.session_state.setdefault("search_results", [])
+st.session_state.setdefault("search_last_query", "")
 
 with st.form("quote_search_form", clear_on_submit=False):
     c1, c2, c3 = st.columns(3)
@@ -507,40 +527,66 @@ with st.form("quote_search_form", clear_on_submit=False):
         search_address = st.text_input("Search by address", key="search_address")
     with c3:
         search_name = st.text_input("Search by name", key="search_name")
+
     submitted = st.form_submit_button("Search", use_container_width=True)
 
 if submitted:
-    phone_norm = norm_phone(search_phone)
-    addr = (search_address or "").strip()
-    name = (search_name or "").strip()
+    phone_norm = norm_phone(st.session_state.get("search_phone", ""))
+    addr = (st.session_state.get("search_address", "") or "").strip()
+    name = (st.session_state.get("search_name", "") or "").strip()
 
     if phone_norm:
         results = search_quotes(phone=phone_norm)
+        st.session_state["search_last_query"] = f"phone={phone_norm}"
     elif addr:
         results = search_quotes(address=addr)
+        st.session_state["search_last_query"] = f"address={addr}"
     elif name:
         results = search_quotes(name=name)
+        st.session_state["search_last_query"] = f"name={name}"
     else:
         results = []
         st.warning("Enter phone, address, or name.")
+        st.session_state["search_last_query"] = ""
 
-    if not results:
-        st.warning("No matching quotes found.")
-    else:
-        for r in results:
-            qid = r.get("quote_id", "")
-            st.markdown(f"**{qid}** — {r.get('created_at','')}")
-            if st.button(f"Load {qid}", key=f"load_{qid}"):
-                # Robust: payload may be under payload_json OR payload, and may be a JSON string
+    # persist results so Load buttons work on rerun
+    st.session_state["search_results"] = results or []
+
+# Render persisted results (NOT inside submitted block)
+results = st.session_state.get("search_results", []) or []
+
+if results:
+    st.caption(f"Results ({len(results)}) — {st.session_state.get('search_last_query','')}")
+    for r in results:
+        qid = str(r.get("quote_id", "")).strip()
+        created = str(r.get("created_at", "")).strip()
+
+        cols = st.columns([3, 1])
+        with cols[0]:
+            st.markdown(f"**{qid}** — {created}")
+
+        with cols[1]:
+            if st.button("Load", key=f"load_{qid}", use_container_width=True):
                 raw = r.get("payload_json", None)
                 if raw is None:
                     raw = r.get("payload", None)
-            
-                load_snapshot_into_state(raw, loaded_quote_id=qid)
-            
-                # Visible confirmation at top of app on rerun
+
+                snapshot = _ensure_dict(raw)
+
+                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+
+                # optional: show a banner after rerun so you KNOW it loaded
                 st.session_state["loaded_banner"] = f"Loaded: {qid}"
                 st.rerun()
+else:
+    # only show "No matching" after a search attempt
+    if st.session_state.get("search_last_query"):
+        st.warning("No matching quotes found.")
+
+# banner (optional)
+if st.session_state.get("loaded_banner"):
+    st.success(st.session_state["loaded_banner"])
+    del st.session_state["loaded_banner"]
 
 # ---------- Measurements ----------
 st.divider()
