@@ -1019,6 +1019,12 @@ else:
             )
 
 
+# ✅ FINAL OVERRIDE: if a quote was loaded, force line_items/subtotal to loaded values
+_loaded = st.session_state.get("loaded_line_items", [])
+if isinstance(_loaded, list) and len(_loaded) > 0:
+    line_items = _loaded
+    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
+
 # ---------- Totals ----------
 st.divider()
 gst = subtotal * GST_RATE
