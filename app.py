@@ -836,8 +836,8 @@ else:
         line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
         subtotal += total
 
-    # ✅ KEEP THE REST OF YOUR EXISTING add-ons code EXACTLY BELOW THIS
-    # (Removal, addons_df groups, skirting, etc.)
+        # ensure builder items are stored so totals/payload use correct list
+        st.session_state["loaded_line_items"] = line_items
 
 
 # ---------- Add-ons ----------
