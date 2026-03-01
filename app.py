@@ -585,6 +585,7 @@ ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 
 # ---------- Work type & Product (THIS is the only selector block now) ----------
+
 st.divider()
 st.subheader("Work type & Product")
 
@@ -592,11 +593,16 @@ def on_job_mode_change():
     # clear opposing ids and any core override so it doesn't carry across modes
     if st.session_state.get("job_mode") == "Supply & Install":
         st.session_state["install_id"] = ""
+        if "core_price_install" in st.session_state:
+            del st.session_state["core_price_install"]
+        if "last_install_id" in st.session_state:
+            del st.session_state["last_install_id"]
     else:
         st.session_state["product_id"] = ""
-    for k in ["core_price_supply", "core_price_install"]:
-        if k in st.session_state:
-            del st.session_state[k]
+        if "core_price_supply" in st.session_state:
+            del st.session_state["core_price_supply"]
+        if "last_product_id" in st.session_state:
+            del st.session_state["last_product_id"]
 
 st.radio(
     "Work type",
@@ -624,9 +630,13 @@ if st.session_state.get("job_mode") == "Supply & Install":
         st.stop()
 
     ids = products_df["id"].astype(str).tolist()
+    if not ids:
+        st.error("products sheet has no active rows.")
+        st.stop()
+
     current = st.session_state.get("product_id", "")
     if current not in ids:
-        current = ids[0] if ids else ""
+        current = ids[0]
         st.session_state["product_id"] = current
 
     def _fmt_product(pid: str) -> str:
@@ -642,11 +652,18 @@ if st.session_state.get("job_mode") == "Supply & Install":
         format_func=_fmt_product,
     )
 
+    # compute default from selected product
     row = products_df.loc[products_df["id"].astype(str) == str(st.session_state["product_id"])].iloc[0]
     b = str(row.get(brand_col, "")).strip() if brand_col else ""
     n = str(row.get(name_col, "")).strip() if name_col else ""
     product_label = f"Supply & install — {b} {n}".strip()
     unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
+
+    # ✅ IMPORTANT: if product changed, reset core price to sheet default
+    last_pid = st.session_state.get("last_product_id", "")
+    if last_pid != st.session_state["product_id"]:
+        st.session_state["core_price_supply"] = float(unit_price_default)
+        st.session_state["last_product_id"] = st.session_state["product_id"]
 
 else:
     if install_df.empty or "id" not in install_df.columns:
@@ -661,9 +678,13 @@ else:
         st.stop()
 
     ids = install_df["id"].astype(str).tolist()
+    if not ids:
+        st.error("install_only sheet has no active rows.")
+        st.stop()
+
     current = st.session_state.get("install_id", "")
     if current not in ids:
-        current = ids[0] if ids else ""
+        current = ids[0]
         st.session_state["install_id"] = current
 
     def _fmt_install(iid: str) -> str:
@@ -677,9 +698,16 @@ else:
         format_func=_fmt_install,
     )
 
+    # compute default from selected install
     row = install_df.loc[install_df["id"].astype(str) == str(st.session_state["install_id"])].iloc[0]
     install_label = str(row.get(name_col, "Installation")).strip() if name_col else "Installation"
     unit_price_default = safe_float(row.get(price_col, 0.0), 0.0)
+
+    # ✅ IMPORTANT: if install changed, reset core price to sheet default
+    last_iid = st.session_state.get("last_install_id", "")
+    if last_iid != st.session_state["install_id"]:
+        st.session_state["core_price_install"] = float(unit_price_default)
+        st.session_state["last_install_id"] = st.session_state["install_id"]
 
 # quote type after selecting product/install
 st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
