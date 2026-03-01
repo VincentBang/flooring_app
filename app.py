@@ -683,6 +683,7 @@ b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
 ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 
+is_loaded_view = bool(st.session_state.get("loaded_quote_id"))
 # ---------- Work type & Product (THIS is the only selector block now) ----------
 
 st.divider()
