@@ -531,11 +531,16 @@ if submitted:
             qid = r.get("quote_id", "")
             st.markdown(f"**{qid}** — {r.get('created_at','')}")
             if st.button(f"Load {qid}", key=f"load_{qid}"):
-                snapshot = r.get("payload_json", {}) or {}
-                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
-                st.success(f"Loaded: {qid}")
+                # Robust: payload may be under payload_json OR payload, and may be a JSON string
+                raw = r.get("payload_json", None)
+                if raw is None:
+                    raw = r.get("payload", None)
+            
+                load_snapshot_into_state(raw, loaded_quote_id=qid)
+            
+                # Visible confirmation at top of app on rerun
+                st.session_state["loaded_banner"] = f"Loaded: {qid}"
                 st.rerun()
-
 
 # ---------- Measurements ----------
 st.divider()
