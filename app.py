@@ -1025,6 +1025,10 @@ if isinstance(_loaded, list) and len(_loaded) > 0:
     line_items = _loaded
     subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
+if isinstance(_loaded, list) and len(_loaded) > 0:
+    st.subheader("Loaded quote items (from Google Sheet)")
+    st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
+
 # ---------- Totals ----------
 st.divider()
 gst = subtotal * GST_RATE
