@@ -795,24 +795,22 @@ st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
 st.divider()
 st.subheader("Quote Items")
 
-if st.session_state.get("quote_loaded_mode", False):
+loaded_items = st.session_state.get("loaded_line_items")
 
-    line_items = st.session_state.get("loaded_line_items", [])
+if isinstance(loaded_items, list) and len(loaded_items) > 0:
+
+    # USE LOADED DATA
+    line_items = loaded_items
     subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
-    df_show = pd.DataFrame(line_items)
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
-
-    if st.button("Edit this quote", use_container_width=True):
-        st.session_state["quote_loaded_mode"] = False
-        st.session_state["loaded_line_items"] = []
-        st.rerun()
+    st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
 
 else:
+
+    # NORMAL BUILDER MODE
     line_items: List[dict] = []
     subtotal = 0.0
 
-    # ---- KEEP YOUR EXISTING BUILDER CODE BELOW THIS ----
 
     if st.session_state["job_mode"] == "Supply & Install":
         unit_price = st.number_input(
