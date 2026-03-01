@@ -182,24 +182,45 @@ def search_quotes(phone=None, address=None, name=None):
         return []
 
 
-def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""):
+def load_snapshot_into_state(snapshot: Any, loaded_quote_id: str = ""):
     ss = st.session_state
+
+    # --- normalize snapshot into a dict ---
+    # Apps Script sometimes returns payload as:
+    # - dict (ideal)
+    # - JSON string (common from sheet cell)
+    # - None
+    if snapshot is None:
+        snap = {}
+    elif isinstance(snapshot, dict):
+        snap = snapshot
+    elif isinstance(snapshot, str):
+        try:
+            snap = json.loads(snapshot)
+            if not isinstance(snap, dict):
+                snap = {}
+        except Exception:
+            snap = {}
+    else:
+        snap = {}
 
     # clear dynamic widget keys
     for k in list(ss.keys()):
         if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "rem_", "sk_", "core_")):
             del ss[k]
 
-    ss["client_name"] = str(snapshot.get("client_name", "") or "")
-    ss["client_phone"] = str(snapshot.get("client_phone", "") or "")
-    ss["client_email"] = str(snapshot.get("client_email", "") or "")
-    ss["site_address"] = str(snapshot.get("site_address", "") or "")
+    # restore fields
+    ss["client_name"] = str(snap.get("client_name", "") or "")
+    ss["client_phone"] = str(snap.get("client_phone", "") or "")
+    ss["client_email"] = str(snap.get("client_email", "") or "")
+    ss["site_address"] = str(snap.get("site_address", "") or "")
 
-    ss["job_mode"] = str(snapshot.get("job_mode", ss.get("job_mode", "Supply & Install")) or "Supply & Install")
-    ss["quote_type"] = str(snapshot.get("quote_type", ss.get("quote_type", "Retail")) or "Retail")
-    ss["wastage_pct"] = float(snapshot.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
+    ss["job_mode"] = str(snap.get("job_mode", ss.get("job_mode", "Supply & Install")) or "Supply & Install")
+    ss["quote_type"] = str(snap.get("quote_type", ss.get("quote_type", "Retail")) or "Retail")
+    ss["wastage_pct"] = float(snap.get("wastage_pct", ss.get("wastage_pct", DEFAULT_WASTAGE_PCT)) or DEFAULT_WASTAGE_PCT)
 
-    rooms = snapshot.get("rooms", [])
+    # restore rooms
+    rooms = snap.get("rooms", [])
     restored = []
     if isinstance(rooms, list) and rooms:
         for r in rooms:
@@ -214,6 +235,12 @@ def load_snapshot_into_state(snapshot: Dict[str, Any], loaded_quote_id: str = ""
     ss["last_loaded_quote_id"] = loaded_quote_id or ""
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
+
+    # Also clear selector memory so defaults recalc cleanly on loaded quote
+    if "last_product_id" in ss:
+        del ss["last_product_id"]
+    if "last_install_id" in ss:
+        del ss["last_install_id"]
 
 
 # =========================
