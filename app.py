@@ -786,7 +786,7 @@ else:
                 continue
             subtotal += addon_row(
                 key=f"rem_{rid}",
-                label=f"Removal & disposal — {nm}",
+                label=f"{nm}",
                 unit="m²",
                 qty_default=float(total_area),
                 price_default=float(pr),
