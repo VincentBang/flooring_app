@@ -1011,7 +1011,7 @@ t3.metric("Total (inc GST)", money0(total_inc))
 
 # ---------- Client details at end ----------
 st.divider()
-st.subheader("Client Details (fill at end)")
+st.subheader("Client Details")
 c1, c2 = st.columns(2)
 with c1:
     st.text_input("Client name", key="client_name")
