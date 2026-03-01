@@ -794,35 +794,59 @@ st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
 st.divider()
 st.subheader("Quote Items")
 
-if "loaded_line_items" in st.session_state:
-    line_items = st.session_state["loaded_line_items"]
-    subtotal = sum(float(li.get("total", 0)) for li in line_items)
+# ✅ If we loaded a saved quote, show EXACT saved items (do not rebuild)
+loaded_items = st.session_state.get("loaded_line_items", [])
+
+if loaded_items:
+    line_items = loaded_items
+    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
+
+    # Display loaded items clearly
+    df_show = pd.DataFrame(line_items)
+    # keep consistent column names
+    df_show = df_show.rename(columns={"qty_str": "qty", "unit_price": "price"})
+    # order columns if they exist
+    cols = [c for c in ["label", "qty", "price", "total"] if c in df_show.columns]
+    st.dataframe(df_show[cols], use_container_width=True, hide_index=True)
+
+    st.info("Loaded quote items are shown above (from Google Sheet). Click 'Edit loaded quote' to rebuild pricing UI.")
+
+    if st.button("Edit loaded quote (rebuild pricing UI)", use_container_width=True):
+        # clear loaded items so normal builder runs
+        st.session_state["loaded_line_items"] = []
+        st.rerun()
+
 else:
+    # ---------- Normal builder (your existing code stays the same) ----------
     line_items: List[dict] = []
     subtotal = 0.0
 
-if st.session_state["job_mode"] == "Supply & Install":
-    unit_price = st.number_input(
-        "Supply & Install price ($/m²) (default from sheet)",
-        min_value=0.0,
-        value=float(unit_price_default),
-        step=1.0,
-        key="core_price_supply",
-    )
-    total = chargeable_area * unit_price
-    line_items.append(line_item(product_label or "Supply & install", f"{chargeable_area:.2f} m²", unit_price, total))
-    subtotal += total
-else:
-    unit_price = st.number_input(
-        "Installation price ($/m²) (default from sheet)",
-        min_value=0.0,
-        value=float(unit_price_default),
-        step=1.0,
-        key="core_price_install",
-    )
-    total = total_area * unit_price
-    line_items.append(line_item(install_label or "Installation", f"{total_area:.2f} m²", unit_price, total))
-    subtotal += total
+    if st.session_state["job_mode"] == "Supply & Install":
+        unit_price = st.number_input(
+            "Supply & Install price ($/m²) (default from sheet)",
+            min_value=0.0,
+            value=float(unit_price_default),
+            step=1.0,
+            key="core_price_supply",  # keep your key
+        )
+        total = chargeable_area * unit_price
+        line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
+        subtotal += total
+
+    else:
+        unit_price = st.number_input(
+            "Installation price ($/m²) (default from sheet)",
+            min_value=0.0,
+            value=float(unit_price_default),
+            step=1.0,
+            key="core_price_install",  # keep your key
+        )
+        total = total_area * unit_price
+        line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
+        subtotal += total
+
+    # ✅ KEEP THE REST OF YOUR EXISTING add-ons code EXACTLY BELOW THIS
+    # (Removal, addons_df groups, skirting, etc.)
 
 
 # ---------- Add-ons ----------
