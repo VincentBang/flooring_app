@@ -1051,7 +1051,15 @@ if not is_loaded_view:
 else:
     st.info("Viewing a saved quote. Pricing inputs are disabled to prevent overwriting saved items.")
 
+# ✅ Single source of truth for totals/output
+if is_loaded_view:
+    line_items = st.session_state.get("loaded_line_items", []) or []
+    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
+# ✅ Single source of truth for totals/output
+if is_loaded_view:
+    line_items = st.session_state.get("loaded_line_items", []) or []
+    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
 # ---------- Totals ----------
 st.divider()
