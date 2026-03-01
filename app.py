@@ -799,32 +799,24 @@ st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
 st.divider()
 st.subheader("Quote Items")
 
-# ✅ If we loaded a saved quote, show EXACT saved items (do not rebuild)
-loaded_items = st.session_state.get("loaded_line_items", [])
+if st.session_state.get("quote_loaded_mode", False):
 
-if loaded_items:
-    line_items = loaded_items
+    line_items = st.session_state.get("loaded_line_items", [])
     subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
-    # Display loaded items clearly
     df_show = pd.DataFrame(line_items)
-    # keep consistent column names
-    df_show = df_show.rename(columns={"qty_str": "qty", "unit_price": "price"})
-    # order columns if they exist
-    cols = [c for c in ["label", "qty", "price", "total"] if c in df_show.columns]
-    st.dataframe(df_show[cols], use_container_width=True, hide_index=True)
+    st.dataframe(df_show, use_container_width=True, hide_index=True)
 
-    st.info("Loaded quote items are shown above (from Google Sheet). Click 'Edit loaded quote' to rebuild pricing UI.")
-
-    if st.button("Edit loaded quote (rebuild pricing UI)", use_container_width=True):
-        # clear loaded items so normal builder runs
+    if st.button("Edit this quote", use_container_width=True):
+        st.session_state["quote_loaded_mode"] = False
         st.session_state["loaded_line_items"] = []
         st.rerun()
 
 else:
-    # ---------- Normal builder (your existing code stays the same) ----------
     line_items: List[dict] = []
     subtotal = 0.0
+
+    # ---- KEEP YOUR EXISTING BUILDER CODE BELOW THIS ----
 
     if st.session_state["job_mode"] == "Supply & Install":
         unit_price = st.number_input(
