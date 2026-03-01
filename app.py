@@ -576,16 +576,15 @@ if results:
 
         with cols[1]:
             if st.button("Load", key=f"load_{qid}", use_container_width=True):
-
                 snapshot = r.get("payload_json", {}) or {}
-            
                 load_snapshot_into_state(snapshot, loaded_quote_id=qid)
             
-                # store full items
-                st.session_state["loaded_line_items"] = r.get("line_items", [])
+                st.session_state["loaded_line_items"] = r.get("line_items", []) or []
+                st.session_state["loaded_quote_id"] = qid  # ✅ lock into loaded view
             
                 st.success(f"Loaded: {qid}")
                 st.rerun()
+    
 else:
     # only show "No matching" after a search attempt
     if st.session_state.get("search_last_query"):
