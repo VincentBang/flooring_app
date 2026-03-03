@@ -1190,6 +1190,7 @@ import html  # add at top of file
 
 st.subheader("Mobile-friendly quote (ex GST)")
 mobile_text = build_mobile_quote_text(payload)
+st.text_area(, value=mobile_text, height=260)
 
 safe_text = html.escape(mobile_text)
 
