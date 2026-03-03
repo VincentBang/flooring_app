@@ -632,11 +632,11 @@ st.session_state.setdefault("search_last_query", "")
 with st.form("quote_search_form", clear_on_submit=False):
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.text_input("Search by phone (any format)", key="search_phone")
+        st.text_input("Search by name", key="search_name")
     with c2:
         st.text_input("Search by address", key="search_address")
     with c3:
-        st.text_input("Search by name", key="search_name")
+        st.text_input("Search by phone", key="search_phone")
 
     submitted = st.form_submit_button("Search", use_container_width=True)
 
@@ -693,7 +693,7 @@ else:
 
 
 # ---------- Measurements ----------
-# ---------- Measurements ----------
+
 st.divider()
 st.subheader("Measurements")
 
