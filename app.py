@@ -577,12 +577,43 @@ st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {
 
 # Global "Start New Quote" (works anytime)
 if st.button("Start New Quote", use_container_width=True):
-    st.session_state["loaded_quote_id"] = ""
-    st.session_state["loaded_line_items"] = []
-    st.session_state["start_new_quote"] = True
-    # optionally reset rooms
-    st.session_state["rooms"] = [{"length": 0.0, "width": 0.0}]
-    st.session_state["load_nonce"] = int(st.session_state.get("load_nonce", 0)) + 1
+    ss = st.session_state
+
+    # clear loaded quote lock + items
+    ss["loaded_quote_id"] = ""
+    ss["loaded_line_items"] = []
+
+    # clear builder inputs + client details
+    ss["client_name"] = ""
+    ss["client_phone"] = ""
+    ss["client_email"] = ""
+    ss["site_address"] = ""
+
+    # reset quote settings
+    ss["job_mode"] = "Supply & Install"
+    ss["quote_type"] = "Retail"
+    ss["product_id"] = ""
+    ss["install_id"] = ""
+    ss["wastage_pct"] = float(DEFAULT_WASTAGE_PCT)
+
+    # reset rooms
+    ss["rooms"] = [{"length": 0.0, "width": 0.0}]
+
+    # clear dynamic widget keys (so checkboxes/qty/price don’t “stick”)
+    for k in list(ss.keys()):
+        if str(k).startswith(("dim_", "addon_", "addon_qty_", "addon_price_", "rem_", "sk_", "core_")):
+            del ss[k]
+
+    # clear search UI completely
+    clear_search_state()
+
+    # reset save flags
+    ss["quote_saved"] = False
+    ss["last_quote_id"] = ""
+
+    # force widget rebuild
+    ss["load_nonce"] = int(ss.get("load_nonce", 0)) + 1
+
     st.rerun()
 
 # ---------- Retrieve quote ----------
