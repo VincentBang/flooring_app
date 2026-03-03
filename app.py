@@ -187,6 +187,15 @@ def _extract_loaded_items_from_search_row(r: dict) -> List[dict]:
 
     return []
 
+def clear_search_state():
+    ss = st.session_state
+    # clear search inputs
+    for k in ("search_phone", "search_address", "search_name"):
+        if k in ss:
+            ss[k] = ""
+    # clear persisted results + label
+    ss["search_results"] = []
+    ss["search_last_query"] = ""
 
 # =========================
 # APPS SCRIPT I/O
