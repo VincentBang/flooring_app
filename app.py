@@ -922,7 +922,7 @@ if not is_loaded_view:
     else:
         if st.session_state["job_mode"] == "Supply & Install":
             unit_price = st.number_input(
-                "Supply & Install price ($/m²) (default from sheet)",
+                "Supply & Install price ($/m²)",
                 min_value=0.0,
                 value=float(st.session_state.get("core_price_supply", unit_price_default)),
                 step=1.0,
