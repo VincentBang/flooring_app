@@ -1097,8 +1097,9 @@ st.divider()
 st.subheader("Terms")
 terms_default = [
     "Quote valid for 30 days.",
-    "A 10% deposit is required to secure stock and confirm installation date.",
-    "Balance due immediately upon completion.",
+    "A 10% deposit is required to secure materials and confirm the installation schedule.",
+    "A further 50% payment is due upon delivery of materials and commencement of works.",
+    "The remaining balance is payable in full immediately upon completion of the project.",
 ]
 terms_text = st.text_area("Terms (one per line)", "\n".join(terms_default), height=140)
 terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
