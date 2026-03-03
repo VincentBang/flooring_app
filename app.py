@@ -3,7 +3,7 @@ import re
 import uuid
 import datetime
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 import pandas as pd
 import requests
@@ -90,7 +90,7 @@ def fmt_dims(length: float, width: float) -> str:
         return ""
     return f"{_fmt_num(l)}x{_fmt_num(w)}"
 
-def parse_dims(text: str):
+def parse_dims(text: str) -> Tuple[Optional[float], Optional[float]]:
     if not text:
         return None, None
     s = text.strip().lower()
@@ -106,7 +106,7 @@ def parse_dims(text: str):
 def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
     return {"label": str(label), "qty_str": str(qty_str), "unit_price": float(unit_price), "total": float(total)}
 
-def colpick(df: pd.DataFrame, *names: str) -> str | None:
+def colpick(df: pd.DataFrame, *names: str) -> Optional[str]:
     for n in names:
         if n in df.columns:
             return n
@@ -133,7 +133,7 @@ def _ensure_list_of_line_items(x) -> List[dict]:
     """
     line_items may come back as:
       - list[dict] (best)
-      - dict with numeric keys { "0": {...}, "1": {...} } (seen in some sheet/JSON conversions)
+      - dict with numeric keys { "0": {...}, "1": {...} }
       - JSON string of either of the above
       - None
     """
@@ -146,15 +146,9 @@ def _ensure_list_of_line_items(x) -> List[dict]:
             return []
 
     if isinstance(x, list):
-        out = []
-        for it in x:
-            if isinstance(it, dict):
-                out.append(it)
-        return out
+        return [it for it in x if isinstance(it, dict)]
 
     if isinstance(x, dict):
-        # numeric keys -> list, otherwise ignore
-        items = []
         numeric_keys = []
         for k in x.keys():
             try:
@@ -162,6 +156,7 @@ def _ensure_list_of_line_items(x) -> List[dict]:
             except Exception:
                 pass
         if numeric_keys:
+            items = []
             for i in sorted(numeric_keys):
                 it = x.get(str(i), None)
                 if isinstance(it, dict):
@@ -178,16 +173,13 @@ def _extract_loaded_items_from_search_row(r: dict) -> List[dict]:
     """
     payload = _ensure_dict(r.get("payload_json"))
     items = _ensure_list_of_line_items(payload.get("line_items"))
-
     if items:
         return items
 
-    # fallback: sometimes Apps Script returns top-level line_items
     items2 = _ensure_list_of_line_items(r.get("line_items"))
     if items2:
         return items2
 
-    # fallback: older scripts store as line_items_json
     items3 = _ensure_list_of_line_items(r.get("line_items_json"))
     if items3:
         return items3
@@ -209,8 +201,8 @@ def save_quote_to_sheet(payload: dict) -> str:
         "quote_type": payload.get("quote_type", ""),
         "job_mode": payload.get("job_mode", ""),
         "client_name": payload.get("client_name", ""),
-        "client_phone": payload.get("client_phone", ""),          # keep leading 0 (as typed)
-        "client_phone_norm": payload.get("client_phone_norm", ""),# normalized digits for search
+        "client_phone": payload.get("client_phone", ""),           # keep leading 0 (as typed)
+        "client_phone_norm": payload.get("client_phone_norm", ""), # normalized digits for search
         "client_email": payload.get("client_email", ""),
         "site_address": payload.get("site_address", ""),
         "total_area": payload.get("total_area", 0),
@@ -312,11 +304,10 @@ def load_snapshot_into_state(snapshot: Any, loaded_quote_id: str = ""):
     ss["quote_saved"] = False
     ss["last_quote_id"] = ""
 
-    # Also clear selector memory so defaults recalc cleanly on loaded quote
-    if "last_product_id" in ss:
-        del ss["last_product_id"]
-    if "last_install_id" in ss:
-        del ss["last_install_id"]
+    # clear selector memory so defaults recalc cleanly
+    for k in ("last_product_id", "last_install_id"):
+        if k in ss:
+            del ss[k]
 
 
 # =========================
@@ -467,7 +458,7 @@ def build_quote_pdf(payload: dict) -> bytes:
     c.setFont("Helvetica", 9)
     items = payload.get("line_items", []) or []
 
-    for idx, li in enumerate(items):
+    for li in items:
         if y < 120:
             new_page()
             y = draw_company_header()
@@ -530,16 +521,11 @@ def build_quote_pdf(payload: dict) -> bytes:
 # STATE
 # =========================
 def ensure_state():
-    st.session_state.setdefault("loaded_quote_id", "")
-    st.session_state.setdefault("loaded_line_items", [])
-    if "start_new_quote" not in st.session_state:
-        st.session_state["start_new_quote"] = False
-
-    if st.button("Start New Quote"):
-        st.session_state["loaded_line_items"] = []
-        st.session_state["start_new_quote"] = True
-        st.rerun()
     ss = st.session_state
+    ss.setdefault("loaded_quote_id", "")
+    ss.setdefault("loaded_line_items", [])
+    ss.setdefault("start_new_quote", False)
+
     ss.setdefault("load_nonce", 0)
     ss.setdefault("last_loaded_quote_id", "")
     ss.setdefault("rooms", [{"length": 0.0, "width": 0.0}])
@@ -579,6 +565,15 @@ addons_df = load_sheet("addons")
 st.title("📱 Flooring Quote Prototype")
 st.caption(f"{COMPANY['name']} • {COMPANY['abn']} • {COMPANY['phone']} • {COMPANY['email']}")
 
+# Global "Start New Quote" (works anytime)
+if st.button("Start New Quote", use_container_width=True):
+    st.session_state["loaded_quote_id"] = ""
+    st.session_state["loaded_line_items"] = []
+    st.session_state["start_new_quote"] = True
+    # optionally reset rooms
+    st.session_state["rooms"] = [{"length": 0.0, "width": 0.0}]
+    st.session_state["load_nonce"] = int(st.session_state.get("load_nonce", 0)) + 1
+    st.rerun()
 
 # ---------- Retrieve quote ----------
 st.divider()
@@ -588,7 +583,6 @@ if st.session_state.get("loaded_quote_id"):
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Edit loaded quote (switch to builder)", use_container_width=True):
-            # unlock builder (keeps rooms/client loaded)
             st.session_state["loaded_quote_id"] = ""
             st.rerun()
     with c2:
@@ -604,11 +598,11 @@ st.session_state.setdefault("search_last_query", "")
 with st.form("quote_search_form", clear_on_submit=False):
     c1, c2, c3 = st.columns(3)
     with c1:
-        search_phone = st.text_input("Search by phone (any format)", key="search_phone")
+        st.text_input("Search by phone (any format)", key="search_phone")
     with c2:
-        search_address = st.text_input("Search by address", key="search_address")
+        st.text_input("Search by address", key="search_address")
     with c3:
-        search_name = st.text_input("Search by name", key="search_name")
+        st.text_input("Search by name", key="search_name")
 
     submitted = st.form_submit_button("Search", use_container_width=True)
 
@@ -633,7 +627,6 @@ if submitted:
 
     st.session_state["search_results"] = results or []
 
-# Render persisted results (NOT inside submitted block)
 results = st.session_state.get("search_results", []) or []
 
 if results:
@@ -648,13 +641,10 @@ if results:
 
         with cols[1]:
             if st.button("Load", key=f"load_{qid}", use_container_width=True):
-                # ✅ FIX: Always load snapshot from payload_json, and derive ALL line_items from payload_json.line_items
                 snapshot = _ensure_dict(r.get("payload_json", {}))
                 load_snapshot_into_state(snapshot, loaded_quote_id=qid)
 
                 loaded_items = _extract_loaded_items_from_search_row(r)
-
-                # If payload_json exists but line_items missing, try to fall back to snapshot itself
                 if not loaded_items:
                     loaded_items = _ensure_list_of_line_items(snapshot.get("line_items"))
 
@@ -663,7 +653,6 @@ if results:
 
                 st.success(f"Loaded: {qid}")
                 st.rerun()
-
 else:
     if st.session_state.get("search_last_query"):
         st.warning("No matching quotes found.")
@@ -744,24 +733,29 @@ b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
 ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
 
 
+# =========================
+# QUOTE BUILDING
+# =========================
 is_loaded_view = bool(st.session_state.get("loaded_quote_id"))
 st.divider()
 st.subheader("Work type & Product")
+
+# Always define these so later code never crashes
+line_items: List[dict] = []
+subtotal: float = 0.0
 
 if not is_loaded_view:
     def on_job_mode_change():
         if st.session_state.get("job_mode") == "Supply & Install":
             st.session_state["install_id"] = ""
-            if "core_price_install" in st.session_state:
-                del st.session_state["core_price_install"]
-            if "last_install_id" in st.session_state:
-                del st.session_state["last_install_id"]
+            for k in ("core_price_install", "last_install_id"):
+                if k in st.session_state:
+                    del st.session_state[k]
         else:
             st.session_state["product_id"] = ""
-            if "core_price_supply" in st.session_state:
-                del st.session_state["core_price_supply"]
-            if "last_product_id" in st.session_state:
-                del st.session_state["last_product_id"]
+            for k in ("core_price_supply", "last_product_id"):
+                if k in st.session_state:
+                    del st.session_state[k]
 
     st.radio(
         "Work type",
@@ -866,46 +860,38 @@ if not is_loaded_view:
 
     st.selectbox("Quote type", ["Retail", "Builder"], key="quote_type")
 
-
     st.divider()
     st.subheader("Quote Items")
 
+    # If you loaded line items earlier but you're in builder mode, show them
     loaded_items = st.session_state.get("loaded_line_items")
-
     if isinstance(loaded_items, list) and len(loaded_items) > 0:
         line_items = loaded_items
         subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
         st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
-
     else:
-        line_items: List[dict] = []
-        subtotal = 0.0
-
         if st.session_state["job_mode"] == "Supply & Install":
             unit_price = st.number_input(
                 "Supply & Install price ($/m²) (default from sheet)",
                 min_value=0.0,
-                value=float(unit_price_default),
+                value=float(st.session_state.get("core_price_supply", unit_price_default)),
                 step=1.0,
                 key="core_price_supply",
             )
             total = chargeable_area * unit_price
             line_items.append(line_item(product_label, f"{chargeable_area:.2f} m²", unit_price, total))
             subtotal += total
-
         else:
             unit_price = st.number_input(
                 "Installation price ($/m²) (default from sheet)",
                 min_value=0.0,
-                value=float(unit_price_default),
+                value=float(st.session_state.get("core_price_install", unit_price_default)),
                 step=1.0,
                 key="core_price_install",
             )
             total = total_area * unit_price
             line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
             subtotal += total
-        
-
 
     st.divider()
     st.subheader("Add-ons")
@@ -922,7 +908,7 @@ if not is_loaded_view:
         elif unit_norm in ("room", "rooms"):
             step_qty = 1.0
             unit_display = "room"
-        elif unit_norm in ("lm", "linemeter", "linearmeter"):
+        elif unit_norm in ("lm", "linemeter", "linearmeter", "linearmetre", "linemetre"):
             step_qty = 0.5
             unit_display = "lm"
         else:
@@ -955,7 +941,6 @@ if not is_loaded_view:
         line_items.append(line_item(label, f"{qty:.2f} {unit_display}", float(price), total))
         return total
 
-
     st.markdown("### Removal & Disposal")
     if removal_df.empty:
         st.caption("No rows in sheet tab 'removal'.")
@@ -980,7 +965,6 @@ if not is_loaded_view:
                     qty_default=float(total_area),
                     price_default=float(pr),
                 )
-
 
     if addons_df.empty:
         st.caption("No rows in sheet tab 'addons'.")
@@ -1032,7 +1016,6 @@ if not is_loaded_view:
                         price_default=float(item["price"]),
                     )
 
-
     st.markdown("### Skirting")
     if skirting_df.empty:
         st.caption("No rows in sheet tab 'skirting'.")
@@ -1051,45 +1034,38 @@ if not is_loaded_view:
                 row = skirting_df[skirting_df["_sid"] == str(sid)]
                 if row.empty:
                     return str(sid)
-                r = row.iloc[0]
+                rr = row.iloc[0]
                 if h_col:
-                    return f"{int(safe_float(r.get(h_col, 0), 0))}mm"
+                    return f"{int(safe_float(rr.get(h_col, 0), 0))}mm"
                 return str(sid)
 
             st.session_state.setdefault("skirting_id", options[0] if options else "")
-            st.selectbox("Skirting height", options=options, format_func=_sk_fmt, key="skirting_id")
+            if options:
+                st.selectbox("Skirting height", options=options, format_func=_sk_fmt, key="skirting_id")
 
-            row = skirting_df[skirting_df["_sid"] == str(st.session_state.get("skirting_id", ""))]
-            if not row.empty:
-                r = row.iloc[0]
-                price = safe_float(r.get(price_col, 0.0), 0.0)
-                label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
-                default_lm = max(0.0, float(chargeable_area))
+                row = skirting_df[skirting_df["_sid"] == str(st.session_state.get("skirting_id", ""))]
+                if not row.empty:
+                    rr = row.iloc[0]
+                    price = safe_float(rr.get(price_col, 0.0), 0.0)
+                    label = f"Skirting — {_sk_fmt(st.session_state['skirting_id'])}"
+                    default_lm = max(0.0, float(chargeable_area))
 
-                subtotal += addon_row(
-                    key=f"sk_{st.session_state['skirting_id']}",
-                    label=label,
-                    unit="lm",
-                    qty_default=default_lm,
-                    price_default=float(price),
-                )
-
-
-    if isinstance(_loaded, list) and len(_loaded) > 0:
-        st.subheader("Loaded quote items (from Google Sheet)")
-        st.dataframe(pd.DataFrame(line_items), use_container_width=True, hide_index=True)
-    pass
+                    subtotal += addon_row(
+                        key=f"sk_{st.session_state['skirting_id']}",
+                        label=label,
+                        unit="lm",
+                        qty_default=default_lm,
+                        price_default=float(price),
+                    )
 else:
     st.info("Viewing a saved quote. Pricing inputs are disabled to prevent overwriting saved items.")
-
-if is_loaded_view:
     line_items = st.session_state.get("loaded_line_items", []) or []
     subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
-if is_loaded_view:
-    line_items = st.session_state.get("loaded_line_items", []) or []
-    subtotal = sum(float(li.get("total", 0) or 0) for li in line_items)
 
+# =========================
+# TOTALS
+# =========================
 st.divider()
 gst = subtotal * GST_RATE
 total_inc = subtotal + gst
@@ -1099,6 +1075,9 @@ t2.metric("GST", money0(gst))
 t3.metric("Total (inc GST)", money0(total_inc))
 
 
+# =========================
+# CLIENT DETAILS
+# =========================
 st.divider()
 st.subheader("Client Details")
 c1, c2 = st.columns(2)
@@ -1110,6 +1089,9 @@ with c2:
     st.text_input("Site address", key="site_address")
 
 
+# =========================
+# TERMS
+# =========================
 st.divider()
 st.subheader("Terms")
 terms_default = [
@@ -1120,6 +1102,10 @@ terms_default = [
 terms_text = st.text_area("Terms (one per line)", "\n".join(terms_default), height=140)
 terms = [t.strip() for t in terms_text.splitlines() if t.strip()]
 
+
+# =========================
+# PAYLOAD
+# =========================
 rooms_out = []
 for i, r in enumerate(st.session_state["rooms"]):
     rooms_out.append(
@@ -1164,6 +1150,9 @@ def handle_save():
         st.success(f"Quote saved: {qid}")
 
 
+# =========================
+# SAVE & GENERATE
+# =========================
 st.divider()
 st.subheader("Save & Generate")
 
@@ -1190,12 +1179,16 @@ with col2:
         except Exception as e:
             st.error(f"PDF failed: {e}")
 
+
+# =========================
+# MOBILE FRIENDLY TEXT
+# =========================
 st.divider()
 st.subheader("Mobile-friendly quote (copy/paste) (ex GST)")
 mobile_text = build_mobile_quote_text(payload)
 st.text_area("Copy/paste", value=mobile_text, height=260)
 
-# ✅ Copy button (clipboard)
+# Copy button (clipboard)
 copy_cols = st.columns([1, 2])
 with copy_cols[0]:
     copy_clicked = st.button("📋 Copy", use_container_width=True)
@@ -1204,7 +1197,6 @@ with copy_cols[1]:
     st.caption("Copies the whole mobile quote text to your clipboard.")
 
 if copy_clicked:
-    # Use HTML/JS clipboard API
     safe_js_text = json.dumps(mobile_text)  # proper escaping
     components.html(
         f"""
