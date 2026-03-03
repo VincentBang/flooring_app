@@ -1184,31 +1184,27 @@ with col2:
 # =========================
 # MOBILE FRIENDLY TEXT
 # =========================
-st.divider()
+import html  # add at top of file
+
+# ...
+
 st.subheader("Mobile-friendly quote (copy/paste) (ex GST)")
 mobile_text = build_mobile_quote_text(payload)
 st.text_area("Copy/paste", value=mobile_text, height=260)
 
-# ---- Reliable copy button (iframe self-contained) ----
+safe_text = html.escape(mobile_text)
+
 components.html(
     f"""
     <div style="display:flex; gap:12px; align-items:center; font-family: sans-serif;">
       <button id="copyBtn"
-              style="
-                padding:10px 14px;
-                border-radius:10px;
-                border:1px solid #ddd;
-                background:#fff;
-                cursor:pointer;
-                font-weight:600;">
+              style="padding:10px 14px;border-radius:10px;border:1px solid #ddd;background:#fff;cursor:pointer;font-weight:600;">
         📋 Copy
       </button>
       <span id="copyStatus" style="font-size: 14px; color: #444;"></span>
     </div>
 
-    <textarea id="quoteText" style="position:absolute; left:-9999px; top:-9999px;">
-{json.dumps(mobile_text)[1:-1]}
-    </textarea>
+    <textarea id="quoteText" style="position:absolute; left:-9999px; top:-9999px;">{safe_text}</textarea>
 
     <script>
       const btn = document.getElementById("copyBtn");
@@ -1218,17 +1214,13 @@ components.html(
       async function doCopy() {{
         const text = ta.value;
 
-        // 1) Try modern clipboard API
         try {{
           await navigator.clipboard.writeText(text);
           status.textContent = "Copied ✅";
           setTimeout(() => status.textContent = "", 1200);
           return;
-        }} catch (e) {{
-          // fall through
-        }}
+        }} catch (e) {{}}
 
-        // 2) Fallback: execCommand (works in more locked-down contexts)
         try {{
           ta.focus();
           ta.select();
