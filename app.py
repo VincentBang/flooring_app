@@ -1083,7 +1083,7 @@ st.subheader("Client Details")
 c1, c2 = st.columns(2)
 with c1:
     st.text_input("Client name", key="client_name")
-    st.text_input("Client phone (keep 0)", key="client_phone")
+    st.text_input("Client phone", key="client_phone")
 with c2:
     st.text_input("Client email", key="client_email")
     st.text_input("Site address", key="site_address")
