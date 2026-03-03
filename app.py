@@ -904,7 +904,7 @@ if not is_loaded_view:
             total = total_area * unit_price
             line_items.append(line_item(install_label, f"{total_area:.2f} m²", unit_price, total))
             subtotal += total
-            st.session_state["loaded_line_items"] = line_items
+        
 
 
     st.divider()
