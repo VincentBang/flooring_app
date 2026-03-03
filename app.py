@@ -693,9 +693,16 @@ else:
 
 
 # ---------- Measurements ----------
+# ---------- Measurements ----------
 st.divider()
 st.subheader("Measurements")
-st.caption("Type dimensions like 3.2x4 (metres). Used for pricing only; not shown in the PDF.")
+
+is_loaded_view = bool(st.session_state.get("loaded_quote_id"))
+
+if is_loaded_view:
+    st.caption("Locked while viewing a saved quote. Press **Edit loaded quote** to unlock measurements.")
+else:
+    st.caption("Type dimensions like 3.2x4 (metres). Used for pricing only; not shown in the PDF.")
 
 def add_room():
     st.session_state["rooms"].append({"length": 0.0, "width": 0.0})
@@ -722,17 +729,19 @@ for i, room in enumerate(st.session_state["rooms"]):
             key=f"dim_{st.session_state['load_nonce']}_{i}",
             placeholder="e.g. 3.2x4",
             label_visibility="collapsed",
+            disabled=is_loaded_view,   # ✅ lock input when loaded
         ).strip()
 
         new_room = {"length": float(room.get("length", 0.0)), "width": float(room.get("width", 0.0))}
-        if s == "":
-            new_room["length"] = 0.0
-            new_room["width"] = 0.0
-        else:
-            l, w = parse_dims(s)
-            if l is not None and w is not None:
-                new_room["length"] = float(l)
-                new_room["width"] = float(w)
+        if not is_loaded_view:
+            if s == "":
+                new_room["length"] = 0.0
+                new_room["width"] = 0.0
+            else:
+                l, w = parse_dims(s)
+                if l is not None and w is not None:
+                    new_room["length"] = float(l)
+                    new_room["width"] = float(w)
 
     with c2:
         area = float(new_room["length"]) * float(new_room["width"])
@@ -740,13 +749,19 @@ for i, room in enumerate(st.session_state["rooms"]):
 
     with c3:
         if len(st.session_state["rooms"]) > 1:
-            if st.button("✕", key=f"remove_{st.session_state['load_nonce']}_{i}"):
-                remove_room(i)
+            st.button(
+                "✕",
+                key=f"remove_{st.session_state['load_nonce']}_{i}",
+                on_click=remove_room,
+                args=(i,),
+                disabled=is_loaded_view,  # ✅ lock remove
+            )
 
     updated_rooms.append(new_room)
 
 st.session_state["rooms"] = updated_rooms
-st.button("➕ Add Room", on_click=add_room)
+
+st.button("➕ Add Room", on_click=add_room, disabled=is_loaded_view)  # ✅ lock add
 
 total_area = sum(float(r["length"]) * float(r["width"]) for r in st.session_state["rooms"])
 
@@ -758,14 +773,15 @@ wastage_pct = st.number_input(
     value=float(st.session_state.get("wastage_pct", DEFAULT_WASTAGE_PCT)),
     step=0.5,
     key="wastage_pct",
+    disabled=is_loaded_view,  # ✅ lock wastage
 )
+
 chargeable_area = total_area * (1.0 + float(wastage_pct) / 100.0)
 
 a, b, ccol = st.columns(3)
 a.metric("Total area (m²)", f"{total_area:.2f}")
 b.metric("Wastage (%)", f"{float(wastage_pct):.1f}")
 ccol.metric("Chargeable area (m²)", f"{chargeable_area:.2f}")
-
 
 # =========================
 # QUOTE BUILDING
