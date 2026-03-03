@@ -1188,38 +1188,60 @@ st.subheader("Mobile-friendly quote (copy/paste) (ex GST)")
 mobile_text = build_mobile_quote_text(payload)
 st.text_area("Copy/paste", value=mobile_text, height=260)
 
-# Copy button (clipboard)
-copy_cols = st.columns([1, 2])
-with copy_cols[0]:
-    copy_clicked = st.button("📋 Copy", use_container_width=True)
+# ---- Reliable copy button (iframe self-contained) ----
+components.html(
+    f"""
+    <div style="display:flex; gap:12px; align-items:center; font-family: sans-serif;">
+      <button id="copyBtn"
+              style="
+                padding:10px 14px;
+                border-radius:10px;
+                border:1px solid #ddd;
+                background:#fff;
+                cursor:pointer;
+                font-weight:600;">
+        📋 Copy
+      </button>
+      <span id="copyStatus" style="font-size: 14px; color: #444;"></span>
+    </div>
 
-with copy_cols[1]:
-    st.caption("Copies the whole mobile quote text to your clipboard.")
+    <textarea id="quoteText" style="position:absolute; left:-9999px; top:-9999px;">
+{json.dumps(mobile_text)[1:-1]}
+    </textarea>
 
-if copy_clicked:
-    safe_js_text = json.dumps(mobile_text)  # proper escaping
-    components.html(
-        f"""
-        <script>
-        (async function() {{
-            try {{
-                await navigator.clipboard.writeText({safe_js_text});
-                const el = document.createElement('div');
-                el.innerText = "Copied ✅";
-                el.style.fontFamily = "sans-serif";
-                el.style.padding = "8px 0";
-                document.body.appendChild(el);
-                setTimeout(() => el.remove(), 1200);
-            }} catch (e) {{
-                const el = document.createElement('div');
-                el.innerText = "Copy failed — browser blocked clipboard.";
-                el.style.fontFamily = "sans-serif";
-                el.style.padding = "8px 0";
-                document.body.appendChild(el);
-                setTimeout(() => el.remove(), 1800);
-            }}
-        }})();
-        </script>
-        """,
-        height=0,
-    )
+    <script>
+      const btn = document.getElementById("copyBtn");
+      const status = document.getElementById("copyStatus");
+      const ta = document.getElementById("quoteText");
+
+      async function doCopy() {{
+        const text = ta.value;
+
+        // 1) Try modern clipboard API
+        try {{
+          await navigator.clipboard.writeText(text);
+          status.textContent = "Copied ✅";
+          setTimeout(() => status.textContent = "", 1200);
+          return;
+        }} catch (e) {{
+          // fall through
+        }}
+
+        // 2) Fallback: execCommand (works in more locked-down contexts)
+        try {{
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand("copy");
+          status.textContent = ok ? "Copied ✅" : "Copy blocked (select + Cmd/Ctrl+C)";
+          setTimeout(() => status.textContent = "", 1800);
+        }} catch (e) {{
+          status.textContent = "Copy blocked (select + Cmd/Ctrl+C)";
+          setTimeout(() => status.textContent = "", 1800);
+        }}
+      }}
+
+      btn.addEventListener("click", doCopy);
+    </script>
+    """,
+    height=60,
+)
