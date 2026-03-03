@@ -895,7 +895,6 @@ if not is_loaded_view:
             subtotal += total
 
     st.divider()
-    st.subheader("Add-ons")
 
     def addon_row(key: str, label: str, unit: str, qty_default: float, price_default: float) -> float:
         checked = st.checkbox(label, key=f"addon_{key}")
