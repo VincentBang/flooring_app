@@ -3,6 +3,7 @@ import re
 import uuid
 import datetime
 import json
+import html
 from typing import List, Dict, Any, Optional, Tuple
 
 import pandas as pd
