@@ -94,15 +94,22 @@ def fmt_dims(length: float, width: float) -> str:
 def parse_dims(text: str) -> Tuple[Optional[float], Optional[float]]:
     if not text:
         return None, None
-    s = text.strip().lower()
-    s = s.replace("×", "x").replace("*", "x").replace(" ", "").replace(",", "x")
-    m = re.match(r"^(\d+(\.\d+)?)[x](\d+(\.\d+)?)$", s)
+    m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*$", text.strip())
     if not m:
         return None, None
     try:
-        return float(m.group(1)), float(m.group(3))
+        return float(m.group(1)), float(m.group(2))
     except Exception:
         return None, None
+
+
+def dims_validation_message(text: str) -> str:
+    s = (text or "").strip()
+    if not s:
+        return ""
+    if parse_dims(s) != (None, None):
+        return ""
+    return "Invalid format. Use numbers only with lowercase x, for example 3x3, 3 x 3, or 3.1234x4."
 
 
 def room_has_dimensions(room: Dict[str, float]) -> bool:
@@ -264,6 +271,11 @@ def inject_measurement_mobile_css():
           box-sizing: border-box;
         }
 
+        .measurement-area-card-invalid {
+          border-color: rgba(185, 28, 28, 0.35);
+          background: linear-gradient(180deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.98));
+        }
+
         .measurement-area-value {
           font-size: 0.95rem;
           font-weight: 700;
@@ -278,6 +290,14 @@ def inject_measurement_mobile_css():
           text-transform: uppercase;
           letter-spacing: 0.03em;
           margin-top: 0.12rem;
+        }
+
+        .measurement-error-text {
+          margin-top: 0.2rem;
+          margin-bottom: 0.35rem;
+          font-size: 0.78rem;
+          line-height: 1.25;
+          color: rgb(185, 28, 28);
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) div[data-testid="stButton"] {
@@ -863,6 +883,7 @@ updated_rooms = []
 for i, room in enumerate(st.session_state["rooms"]):
     default_text = fmt_dims(room.get("length", 0.0), room.get("width", 0.0))
     new_room = {"length": float(room.get("length", 0.0)), "width": float(room.get("width", 0.0))}
+    invalid_dims_message = ""
 
     if not is_loaded_view:
         parsed_length, parsed_width = parse_dims(default_text)
@@ -891,12 +912,17 @@ for i, room in enumerate(st.session_state["rooms"]):
                 if l is not None and w is not None:
                     new_room["length"] = float(l)
                     new_room["width"] = float(w)
+                else:
+                    new_room["length"] = 0.0
+                    new_room["width"] = 0.0
+                    invalid_dims_message = dims_validation_message(s)
 
         area = float(new_room["length"]) * float(new_room["width"])
     with c2:
+        area_card_class = "measurement-area-card measurement-area-card-invalid" if invalid_dims_message else "measurement-area-card"
         st.markdown(
             (
-                "<div class='measurement-area-card'>"
+                f"<div class='{area_card_class}'>"
                 f"<div class='measurement-area-value'>{area:.2f}</div>"
                 "<div class='measurement-area-unit'>m²</div>"
                 "</div>"
@@ -913,6 +939,9 @@ for i, room in enumerate(st.session_state["rooms"]):
                 args=(i,),
                 disabled=is_loaded_view,  # ✅ lock remove
             )
+
+    if invalid_dims_message:
+        st.markdown(f"<div class='measurement-error-text'>{invalid_dims_message}</div>", unsafe_allow_html=True)
 
     updated_rooms.append(new_room)
 
