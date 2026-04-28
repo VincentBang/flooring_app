@@ -317,15 +317,15 @@ def inject_measurement_mobile_css():
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
-          flex: 0 0 62% !important;
-          width: 62% !important;
-          max-width: 62% !important;
+          flex: 0 0 70% !important;
+          width: 70% !important;
+          max-width: 70% !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-          flex: 0 0 38% !important;
-          width: 38% !important;
-          max-width: 38% !important;
+          flex: 0 0 30% !important;
+          width: 30% !important;
+          max-width: 30% !important;
         }
 
         .measurement-row-anchor {
@@ -333,16 +333,16 @@ def inject_measurement_mobile_css():
         }
 
         input[aria-label="Dimensions"] {
-          font-size: 1rem !important;
-          padding-top: 0.7rem !important;
-          padding-bottom: 0.7rem !important;
+          font-size: 1.18rem !important;
+          padding-top: 0.76rem !important;
+          padding-bottom: 0.76rem !important;
           padding-left: 0.8rem !important;
           padding-right: 0.8rem !important;
           min-width: 0 !important;
         }
 
         .measurement-total-card {
-          height: 3rem;
+          height: 3.1rem;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -361,7 +361,7 @@ def inject_measurement_mobile_css():
         }
 
         .measurement-total-value {
-          font-size: 1rem;
+          font-size: 1.18rem;
           font-weight: 700;
           line-height: 1;
           color: rgb(17, 24, 39);
@@ -395,33 +395,33 @@ def inject_measurement_mobile_css():
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
-            flex-basis: 60% !important;
-            width: 60% !important;
-            max-width: 60% !important;
+            flex-basis: 70% !important;
+            width: 70% !important;
+            max-width: 70% !important;
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-            flex-basis: 40% !important;
-            width: 40% !important;
-            max-width: 40% !important;
+            flex-basis: 30% !important;
+            width: 30% !important;
+            max-width: 30% !important;
           }
 
           input[aria-label="Dimensions"] {
-            font-size: 0.96rem !important;
+            font-size: 1.14rem !important;
             padding-left: 0.6rem !important;
             padding-right: 0.6rem !important;
-            padding-top: 0.68rem !important;
-            padding-bottom: 0.68rem !important;
+            padding-top: 0.74rem !important;
+            padding-bottom: 0.74rem !important;
           }
 
           .measurement-total-card {
-            height: 2.92rem;
+            height: 3.02rem;
             border-radius: 0.66rem;
             padding: 0 0.55rem;
           }
 
           .measurement-total-value {
-            font-size: 0.96rem;
+            font-size: 1.14rem;
           }
 
           .measurement-remove-row button[kind="secondary"] {
@@ -890,7 +890,7 @@ for i, room in enumerate(st.session_state["rooms"]):
             new_room["length"] = float(parsed_length)
             new_room["width"] = float(parsed_width)
 
-    c1, c2 = st.columns([6.6, 2.4], gap="small")
+    c1, c2 = st.columns([7, 3], gap="small")
 
     with c1:
         st.markdown("<span class='measurement-row-anchor'></span>", unsafe_allow_html=True)
