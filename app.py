@@ -203,37 +203,104 @@ def inject_measurement_mobile_css():
     st.markdown(
         """
         <style>
-        div[data-testid="stTextInput"] input {
-          padding-right: 5.5rem !important;
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) {
+          display: flex !important;
+          flex-wrap: nowrap !important;
+          align-items: end !important;
+          gap: 0.5rem !important;
         }
 
-        .measurement-inline-area {
-          position: relative;
-          margin-top: -2.25rem;
-          margin-bottom: 0.8rem;
-          padding-right: 0.9rem;
-          text-align: right;
-          font-size: 0.95rem;
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"] {
+          width: auto !important;
+          min-width: 0 !important;
+          flex: 0 0 auto !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
+          flex: 0 0 5.4rem !important;
+          width: 5.4rem !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(3) {
+          flex: 0 0 2.8rem !important;
+          width: 2.8rem !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) input {
+          font-size: 0.95rem !important;
+          padding-top: 0.55rem !important;
+          padding-bottom: 0.55rem !important;
+        }
+
+        .measurement-row-anchor {
+          display: none;
+        }
+
+        .measurement-area-card {
+          height: 2.55rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          border-radius: 0.7rem;
+          border: 1px solid rgba(49, 51, 63, 0.12);
+          background: linear-gradient(180deg, rgba(245, 247, 250, 0.98), rgba(238, 242, 247, 0.98));
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+          margin-top: 0.1rem;
+        }
+
+        .measurement-area-value {
+          font-size: 1rem;
           font-weight: 700;
-          line-height: 1;
-          color: rgba(17, 24, 39, 0.9);
-          pointer-events: none;
-          z-index: 2;
+          line-height: 1.05;
+          color: rgb(17, 24, 39);
         }
 
-        .measurement-inline-area span {
-          background: rgba(255, 255, 255, 0.92);
-          padding-left: 0.35rem;
+        .measurement-area-unit {
+          font-size: 0.65rem;
+          line-height: 1;
+          color: rgba(49, 51, 63, 0.72);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          margin-top: 0.12rem;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) button[kind="secondary"] {
+          min-height: 2.55rem;
+          padding-left: 0.55rem !important;
+          padding-right: 0.55rem !important;
+          border-radius: 0.7rem !important;
         }
 
         @media (max-width: 640px) {
-          div[data-testid="stTextInput"] input {
-            padding-right: 4.8rem !important;
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) {
+            gap: 0.4rem !important;
           }
 
-          .measurement-inline-area {
-            margin-top: -2.15rem;
-            padding-right: 0.8rem;
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
+            flex-basis: 4.9rem !important;
+            width: 4.9rem !important;
+          }
+
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(3) {
+            flex-basis: 2.55rem !important;
+            width: 2.55rem !important;
+          }
+
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) input {
+            font-size: 0.92rem !important;
+          }
+
+          .measurement-area-card {
+            height: 2.45rem;
+          }
+
+          .measurement-area-value {
             font-size: 0.92rem;
           }
         }
@@ -769,9 +836,10 @@ for i, room in enumerate(st.session_state["rooms"]):
             new_room["length"] = float(parsed_length)
             new_room["width"] = float(parsed_width)
 
-    c1, c2 = st.columns([12, 1], gap="small")
+    c1, c2, c3 = st.columns([7.2, 1.9, 0.9], gap="small")
 
     with c1:
+        st.markdown("<span class='measurement-row-anchor'></span>", unsafe_allow_html=True)
         s = st.text_input(
             "Dimensions",
             value=default_text,
@@ -791,12 +859,18 @@ for i, room in enumerate(st.session_state["rooms"]):
                     new_room["width"] = float(w)
 
         area = float(new_room["length"]) * float(new_room["width"])
+    with c2:
         st.markdown(
-            f"<div class='measurement-inline-area'><span>{area:.2f}</span></div>",
+            (
+                "<div class='measurement-area-card'>"
+                f"<div class='measurement-area-value'>{area:.2f}</div>"
+                "<div class='measurement-area-unit'>m²</div>"
+                "</div>"
+            ),
             unsafe_allow_html=True,
         )
 
-    with c2:
+    with c3:
         if len(st.session_state["rooms"]) > 1:
             st.button(
                 "✕",
