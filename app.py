@@ -209,6 +209,93 @@ def clear_search_state():
     ss["search_last_query"] = ""
 
 
+def render_client_details():
+    st.divider()
+    st.subheader("Client Details")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.text_input("Client name", key="client_name")
+        st.text_input("Client phone", key="client_phone")
+    with c2:
+        st.text_input("Client email", key="client_email")
+        st.text_input("Site address", key="site_address")
+
+
+def render_retrieve_existing_quote():
+    st.divider()
+    st.subheader("Retrieve Existing Quote")
+
+    if st.session_state.get("loaded_quote_id"):
+        if st.button("Edit loaded quote (switch to builder)", use_container_width=True):
+            st.session_state["loaded_quote_id"] = ""
+            st.rerun()
+
+    st.session_state.setdefault("search_results", [])
+    st.session_state.setdefault("search_last_query", "")
+
+    with st.form("quote_search_form", clear_on_submit=False):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.text_input("Search by name", key="search_name")
+        with c2:
+            st.text_input("Search by address", key="search_address")
+        with c3:
+            st.text_input("Search by phone", key="search_phone")
+
+        submitted = st.form_submit_button("Search", use_container_width=True)
+
+    if submitted:
+        phone_norm = norm_phone(st.session_state.get("search_phone", ""))
+        addr = (st.session_state.get("search_address", "") or "").strip()
+        name = (st.session_state.get("search_name", "") or "").strip()
+
+        if phone_norm:
+            results = search_quotes(phone=phone_norm)
+            st.session_state["search_last_query"] = f"phone={phone_norm}"
+        elif addr:
+            results = search_quotes(address=addr)
+            st.session_state["search_last_query"] = f"address={addr}"
+        elif name:
+            results = search_quotes(name=name)
+            st.session_state["search_last_query"] = f"name={name}"
+        else:
+            results = []
+            st.warning("Enter phone, address, or name.")
+            st.session_state["search_last_query"] = ""
+
+        st.session_state["search_results"] = results or []
+
+    results = st.session_state.get("search_results", []) or []
+
+    if results:
+        st.caption(f"Results ({len(results)}) — {st.session_state.get('search_last_query','')}")
+        for r in results:
+            qid = str(r.get("quote_id", "")).strip()
+            created = str(r.get("created_at", "")).strip()
+
+            cols = st.columns([3, 1])
+            with cols[0]:
+                st.markdown(f"**{qid}** — {created}")
+
+            with cols[1]:
+                if st.button("Load", key=f"load_{qid}", use_container_width=True):
+                    snapshot = _ensure_dict(r.get("payload_json", {}))
+                    load_snapshot_into_state(snapshot, loaded_quote_id=qid)
+
+                    loaded_items = _extract_loaded_items_from_search_row(r)
+                    if not loaded_items:
+                        loaded_items = _ensure_list_of_line_items(snapshot.get("line_items"))
+
+                    st.session_state["loaded_line_items"] = loaded_items
+                    st.session_state["loaded_quote_id"] = qid
+
+                    st.success(f"Loaded: {qid}")
+                    st.rerun()
+    else:
+        if st.session_state.get("search_last_query"):
+            st.warning("No matching quotes found.")
+
+
 def inject_measurement_mobile_css():
     """Keep measurement metadata readable on narrow phone screens."""
     st.markdown(
@@ -230,14 +317,15 @@ def inject_measurement_mobile_css():
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
-          flex: 0 1 calc(100% - 5.8rem) !important;
-          width: calc(100% - 5.8rem) !important;
-          max-width: calc(100% - 5.8rem) !important;
+          flex: 0 0 62% !important;
+          width: 62% !important;
+          max-width: 62% !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-          flex: 0 0 5.35rem !important;
-          width: 5.35rem !important;
+          flex: 0 0 38% !important;
+          width: 38% !important;
+          max-width: 38% !important;
         }
 
         .measurement-row-anchor {
@@ -307,14 +395,15 @@ def inject_measurement_mobile_css():
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
-            flex-basis: calc(100% - 5.15rem) !important;
-            width: calc(100% - 5.15rem) !important;
-            max-width: calc(100% - 5.15rem) !important;
+            flex-basis: 60% !important;
+            width: 60% !important;
+            max-width: 60% !important;
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-            flex-basis: 4.75rem !important;
-            width: 4.75rem !important;
+            flex-basis: 40% !important;
+            width: 40% !important;
+            max-width: 40% !important;
           }
 
           input[aria-label="Dimensions"] {
@@ -765,80 +854,7 @@ if st.button("Start New Quote", use_container_width=True):
 
     st.rerun()
 
-# ---------- Retrieve quote ----------
-st.divider()
-st.subheader("Retrieve Existing Quote")
-
-if st.session_state.get("loaded_quote_id"):
-    if st.button("Edit loaded quote (switch to builder)", use_container_width=True):
-        st.session_state["loaded_quote_id"] = ""
-        st.rerun()
-
-# keep results across reruns so Load buttons work
-st.session_state.setdefault("search_results", [])
-st.session_state.setdefault("search_last_query", "")
-
-with st.form("quote_search_form", clear_on_submit=False):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.text_input("Search by name", key="search_name")
-    with c2:
-        st.text_input("Search by address", key="search_address")
-    with c3:
-        st.text_input("Search by phone", key="search_phone")
-
-    submitted = st.form_submit_button("Search", use_container_width=True)
-
-if submitted:
-    phone_norm = norm_phone(st.session_state.get("search_phone", ""))
-    addr = (st.session_state.get("search_address", "") or "").strip()
-    name = (st.session_state.get("search_name", "") or "").strip()
-
-    if phone_norm:
-        results = search_quotes(phone=phone_norm)
-        st.session_state["search_last_query"] = f"phone={phone_norm}"
-    elif addr:
-        results = search_quotes(address=addr)
-        st.session_state["search_last_query"] = f"address={addr}"
-    elif name:
-        results = search_quotes(name=name)
-        st.session_state["search_last_query"] = f"name={name}"
-    else:
-        results = []
-        st.warning("Enter phone, address, or name.")
-        st.session_state["search_last_query"] = ""
-
-    st.session_state["search_results"] = results or []
-
-results = st.session_state.get("search_results", []) or []
-
-if results:
-    st.caption(f"Results ({len(results)}) — {st.session_state.get('search_last_query','')}")
-    for r in results:
-        qid = str(r.get("quote_id", "")).strip()
-        created = str(r.get("created_at", "")).strip()
-
-        cols = st.columns([3, 1])
-        with cols[0]:
-            st.markdown(f"**{qid}** — {created}")
-
-        with cols[1]:
-            if st.button("Load", key=f"load_{qid}", use_container_width=True):
-                snapshot = _ensure_dict(r.get("payload_json", {}))
-                load_snapshot_into_state(snapshot, loaded_quote_id=qid)
-
-                loaded_items = _extract_loaded_items_from_search_row(r)
-                if not loaded_items:
-                    loaded_items = _ensure_list_of_line_items(snapshot.get("line_items"))
-
-                st.session_state["loaded_line_items"] = loaded_items
-                st.session_state["loaded_quote_id"] = qid  # lock into loaded view
-
-                st.success(f"Loaded: {qid}")
-                st.rerun()
-else:
-    if st.session_state.get("search_last_query"):
-        st.warning("No matching quotes found.")
+render_client_details()
 
 
 # ---------- Measurements ----------
@@ -1296,20 +1312,6 @@ t3.metric("Total (inc GST)", money0(total_inc))
 
 
 # =========================
-# CLIENT DETAILS
-# =========================
-st.divider()
-st.subheader("Client Details")
-c1, c2 = st.columns(2)
-with c1:
-    st.text_input("Client name", key="client_name")
-    st.text_input("Client phone", key="client_phone")
-with c2:
-    st.text_input("Client email", key="client_email")
-    st.text_input("Site address", key="site_address")
-
-
-# =========================
 # TERMS
 # =========================
 st.divider()
@@ -1458,3 +1460,5 @@ components.html(
     """,
     height=60,
 )
+
+render_retrieve_existing_quote()
