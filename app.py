@@ -206,14 +206,18 @@ def inject_measurement_mobile_css():
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) {
           display: flex !important;
           flex-wrap: nowrap !important;
-          align-items: end !important;
-          gap: 0.5rem !important;
+          align-items: stretch !important;
+          gap: 0.35rem !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"] {
           width: auto !important;
           min-width: 0 !important;
           flex: 0 0 auto !important;
+          overflow: hidden !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(1) {
@@ -222,19 +226,20 @@ def inject_measurement_mobile_css():
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-          flex: 0 0 5.4rem !important;
-          width: 5.4rem !important;
+          flex: 0 0 4.6rem !important;
+          width: 4.6rem !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(3) {
-          flex: 0 0 2.8rem !important;
-          width: 2.8rem !important;
+          flex: 0 0 2.35rem !important;
+          width: 2.35rem !important;
         }
 
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) input {
           font-size: 0.95rem !important;
           padding-top: 0.55rem !important;
           padding-bottom: 0.55rem !important;
+          min-width: 0 !important;
         }
 
         .measurement-row-anchor {
@@ -242,7 +247,7 @@ def inject_measurement_mobile_css():
         }
 
         .measurement-area-card {
-          height: 2.55rem;
+          height: 2.5rem;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -251,11 +256,12 @@ def inject_measurement_mobile_css():
           border: 1px solid rgba(49, 51, 63, 0.12);
           background: linear-gradient(180deg, rgba(245, 247, 250, 0.98), rgba(238, 242, 247, 0.98));
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-          margin-top: 0.1rem;
+          width: 100%;
+          box-sizing: border-box;
         }
 
         .measurement-area-value {
-          font-size: 1rem;
+          font-size: 0.95rem;
           font-weight: 700;
           line-height: 1.05;
           color: rgb(17, 24, 39);
@@ -270,38 +276,62 @@ def inject_measurement_mobile_css():
           margin-top: 0.12rem;
         }
 
+        div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) div[data-testid="stButton"] {
+          height: 2.5rem;
+          display: flex;
+          align-items: stretch;
+        }
+
         div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) button[kind="secondary"] {
-          min-height: 2.55rem;
-          padding-left: 0.55rem !important;
-          padding-right: 0.55rem !important;
+          height: 100%;
+          width: 100%;
+          min-height: 2.5rem;
+          min-width: 2.35rem;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
           border-radius: 0.7rem !important;
         }
 
         @media (max-width: 640px) {
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) {
-            gap: 0.4rem !important;
+            gap: 0.3rem !important;
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(2) {
-            flex-basis: 4.9rem !important;
-            width: 4.9rem !important;
+            flex-basis: 4.15rem !important;
+            width: 4.15rem !important;
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) > div[data-testid="column"]:nth-child(3) {
-            flex-basis: 2.55rem !important;
-            width: 2.55rem !important;
+            flex-basis: 2.1rem !important;
+            width: 2.1rem !important;
           }
 
           div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) input {
-            font-size: 0.92rem !important;
+            font-size: 0.9rem !important;
+            padding-left: 0.7rem !important;
+            padding-right: 0.7rem !important;
           }
 
           .measurement-area-card {
-            height: 2.45rem;
+            height: 2.4rem;
           }
 
           .measurement-area-value {
-            font-size: 0.92rem;
+            font-size: 0.88rem;
+          }
+
+          .measurement-area-unit {
+            font-size: 0.58rem;
+          }
+
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) div[data-testid="stButton"] {
+            height: 2.4rem;
+          }
+
+          div[data-testid="stHorizontalBlock"]:has(.measurement-row-anchor) button[kind="secondary"] {
+            min-height: 2.4rem;
+            min-width: 2.1rem;
           }
         }
         </style>
