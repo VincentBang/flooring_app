@@ -647,8 +647,6 @@ def build_quote_pdf(payload: dict) -> bytes:
     y -= 14
     c.drawString(left, y, f"Phone: {payload.get('client_phone','')}")
     y -= 14
-    c.drawString(left, y, f"Email: {payload.get('client_email','')}")
-    y -= 14
     c.drawString(left, y, f"Site: {payload.get('site_address','')}")
     y -= 14
     c.drawString(left, y, f"Mode: {payload.get('job_mode','')}   |   Type: {payload.get('quote_type','')}")
