@@ -104,6 +104,10 @@ def parse_dims(text: str) -> Tuple[Optional[float], Optional[float]]:
     except Exception:
         return None, None
 
+
+def room_has_dimensions(room: Dict[str, float]) -> bool:
+    return float(room.get("length", 0.0)) > 0.0 and float(room.get("width", 0.0)) > 0.0
+
 def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
     return {"label": str(label), "qty_str": str(qty_str), "unit_price": float(unit_price), "total": float(total)}
 
@@ -913,6 +917,10 @@ for i, room in enumerate(st.session_state["rooms"]):
     updated_rooms.append(new_room)
 
 st.session_state["rooms"] = updated_rooms
+
+if not is_loaded_view and updated_rooms and room_has_dimensions(updated_rooms[-1]):
+    st.session_state["rooms"] = updated_rooms + [{"length": 0.0, "width": 0.0}]
+    st.rerun()
 
 st.button("➕ Add Room", on_click=add_room, disabled=is_loaded_view)  # ✅ lock add
 
