@@ -115,6 +115,14 @@ def dims_validation_message(text: str) -> str:
 def room_has_dimensions(room: Dict[str, float]) -> bool:
     return float(room.get("length", 0.0)) > 0.0 and float(room.get("width", 0.0)) > 0.0
 
+
+def get_quote_number(payload: Optional[dict] = None, fallback: str = "") -> str:
+    if isinstance(payload, dict):
+        candidate = str(payload.get("quote_number") or payload.get("quote_id") or "").strip()
+        if candidate:
+            return candidate
+    return str(fallback or "").strip()
+
 def line_item(label: str, qty_str: str, unit_price: float, total: float) -> dict:
     return {"label": str(label), "qty_str": str(qty_str), "unit_price": float(unit_price), "total": float(total)}
 
@@ -271,7 +279,7 @@ def render_retrieve_existing_quote():
 
             cols = st.columns([3, 1])
             with cols[0]:
-                st.markdown(f"**{qid}** — {created}")
+                st.markdown(f"**Quote Number: {qid}** — {created}")
 
             with cols[1]:
                 if st.button("Load", key=f"load_{qid}", use_container_width=True):
@@ -416,6 +424,9 @@ def inject_measurement_mobile_css():
 def save_quote_to_sheet(payload: dict) -> str:
     quote_id = f"Q-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
     created_at = datetime.datetime.now().isoformat(timespec="seconds")
+    payload_with_quote = dict(payload)
+    payload_with_quote["quote_number"] = quote_id
+    payload_with_quote["quote_id"] = quote_id
 
     record = {
         "sheet_id": SHEET_ID,
@@ -436,9 +447,9 @@ def save_quote_to_sheet(payload: dict) -> str:
         "total_inc_gst": payload.get("total_inc_gst", 0),
 
         # compatibility
-        "payload_json": payload,
-        "payload": payload,
-        "line_items": payload.get("line_items", []),
+        "payload_json": payload_with_quote,
+        "payload": payload_with_quote,
+        "line_items": payload_with_quote.get("line_items", []),
     }
 
     r = requests.post(APPS_SCRIPT_URL, json=record, timeout=25)
@@ -557,6 +568,10 @@ def build_mobile_quote_text(payload: dict) -> str:
             return (qty_raw, unit)
 
     lines = []
+    quote_number = get_quote_number(payload)
+    if quote_number:
+        lines.append(f"Quote Number: {quote_number}")
+        lines.append("")
     for li in payload.get("line_items", []):
         label = str(li.get("label", "")).strip()
         qty_str = str(li.get("qty_str", "")).strip()
@@ -643,6 +658,10 @@ def build_quote_pdf(payload: dict) -> bytes:
     y -= 20
 
     c.setFont("Helvetica", 10)
+    quote_number = get_quote_number(payload)
+    if quote_number:
+        c.drawString(left, y, f"Quote Number: {quote_number}")
+        y -= 14
     c.drawString(left, y, f"Client: {payload.get('client_name','')}")
     y -= 14
     c.drawString(left, y, f"Phone: {payload.get('client_phone','')}")
@@ -1334,6 +1353,11 @@ payload = {
     "terms": terms,
 }
 
+current_quote_number = st.session_state.get("loaded_quote_id", "") or st.session_state.get("last_quote_id", "")
+if current_quote_number:
+    payload["quote_number"] = current_quote_number
+    payload["quote_id"] = current_quote_number
+
 st.session_state.setdefault("quote_saved", False)
 
 def handle_save():
@@ -1350,6 +1374,9 @@ def handle_save():
 st.divider()
 st.subheader("Save & Generate")
 
+if current_quote_number:
+    st.caption(f"Quote Number: {current_quote_number}")
+
 col1, col2 = st.columns(2)
 with col1:
     if st.button("💾 Save Quote", use_container_width=True):
@@ -1362,7 +1389,12 @@ with col2:
     if st.button("Generate PDF & Download", use_container_width=True):
         try:
             handle_save()
-            pdf_bytes = build_quote_pdf(payload)
+            pdf_payload = dict(payload)
+            saved_quote_number = st.session_state.get("last_quote_id", "") or current_quote_number
+            if saved_quote_number:
+                pdf_payload["quote_number"] = saved_quote_number
+                pdf_payload["quote_id"] = saved_quote_number
+            pdf_bytes = build_quote_pdf(pdf_payload)
             st.download_button(
                 "Click to Download PDF",
                 data=pdf_bytes,
@@ -1382,7 +1414,11 @@ import html  # add at top of file
 # ...
 
 st.subheader("Mobile-friendly quote (ex GST)")
-mobile_text = build_mobile_quote_text(payload)
+mobile_payload = dict(payload)
+if current_quote_number:
+    mobile_payload["quote_number"] = current_quote_number
+    mobile_payload["quote_id"] = current_quote_number
+mobile_text = build_mobile_quote_text(mobile_payload)
 st.text_area("", value=mobile_text, height=260)
 
 safe_text = html.escape(mobile_text)
