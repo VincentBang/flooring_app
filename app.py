@@ -212,13 +212,9 @@ def clear_search_state():
 def render_client_details():
     st.divider()
     st.subheader("Client Details")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.text_input("Client name", key="client_name")
-        st.text_input("Client phone", key="client_phone")
-    with c2:
-        st.text_input("Client email", key="client_email")
-        st.text_input("Site address", key="site_address")
+    st.text_input("Client name", key="client_name")
+    st.text_input("Client phone", key="client_phone")
+    st.text_input("Site address", key="site_address")
 
 
 def render_retrieve_existing_quote():
