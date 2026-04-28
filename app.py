@@ -197,6 +197,51 @@ def clear_search_state():
     ss["search_results"] = []
     ss["search_last_query"] = ""
 
+
+def inject_measurement_mobile_css():
+    """Keep measurement metadata readable on narrow phone screens."""
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stTextInput"] input {
+          padding-right: 5.5rem !important;
+        }
+
+        .measurement-inline-area {
+          position: relative;
+          margin-top: -2.25rem;
+          margin-bottom: 0.8rem;
+          padding-right: 0.9rem;
+          text-align: right;
+          font-size: 0.95rem;
+          font-weight: 700;
+          line-height: 1;
+          color: rgba(17, 24, 39, 0.9);
+          pointer-events: none;
+          z-index: 2;
+        }
+
+        .measurement-inline-area span {
+          background: rgba(255, 255, 255, 0.92);
+          padding-left: 0.35rem;
+        }
+
+        @media (max-width: 640px) {
+          div[data-testid="stTextInput"] input {
+            padding-right: 4.8rem !important;
+          }
+
+          .measurement-inline-area {
+            margin-top: -2.15rem;
+            padding-right: 0.8rem;
+            font-size: 0.92rem;
+          }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # =========================
 # APPS SCRIPT I/O
 # =========================
@@ -696,6 +741,7 @@ else:
 
 st.divider()
 st.subheader("Measurements")
+inject_measurement_mobile_css()
 
 is_loaded_view = bool(st.session_state.get("loaded_quote_id"))
 
@@ -712,15 +758,18 @@ def remove_room(idx: int):
         st.session_state["rooms"].pop(idx)
         st.rerun()
 
-h1, h2, h3 = st.columns([2, 1, 0.6], gap="small")
-h1.markdown("**Length x Width (m)**")
-h2.markdown("**Area (m²)**")
-h3.markdown("")
-
 updated_rooms = []
 for i, room in enumerate(st.session_state["rooms"]):
     default_text = fmt_dims(room.get("length", 0.0), room.get("width", 0.0))
-    c1, c2, c3 = st.columns([2, 1, 0.6], gap="small")
+    new_room = {"length": float(room.get("length", 0.0)), "width": float(room.get("width", 0.0))}
+
+    if not is_loaded_view:
+        parsed_length, parsed_width = parse_dims(default_text)
+        if parsed_length is not None and parsed_width is not None:
+            new_room["length"] = float(parsed_length)
+            new_room["width"] = float(parsed_width)
+
+    c1, c2 = st.columns([12, 1], gap="small")
 
     with c1:
         s = st.text_input(
@@ -731,8 +780,6 @@ for i, room in enumerate(st.session_state["rooms"]):
             label_visibility="collapsed",
             disabled=is_loaded_view,   # ✅ lock input when loaded
         ).strip()
-
-        new_room = {"length": float(room.get("length", 0.0)), "width": float(room.get("width", 0.0))}
         if not is_loaded_view:
             if s == "":
                 new_room["length"] = 0.0
@@ -743,11 +790,13 @@ for i, room in enumerate(st.session_state["rooms"]):
                     new_room["length"] = float(l)
                     new_room["width"] = float(w)
 
-    with c2:
         area = float(new_room["length"]) * float(new_room["width"])
-        st.markdown(f"<div style='padding-top:0.55rem;font-size:1rem;'>{area:.2f}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='measurement-inline-area'><span>{area:.2f}</span></div>",
+            unsafe_allow_html=True,
+        )
 
-    with c3:
+    with c2:
         if len(st.session_state["rooms"]) > 1:
             st.button(
                 "✕",
